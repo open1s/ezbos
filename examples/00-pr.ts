@@ -1,0 +1,1 @@
+console.log('This is a placeholder file for the 00-pr.ts example. Please refer to the other example files for actual code demonstrations of BrainOS features.');

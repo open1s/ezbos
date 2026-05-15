@@ -83,7 +83,7 @@ export class ToolBuilder {
           throw new Error('Async tool callbacks are not supported. Use a sync callback instead.');
         }
 
-        if (isErrorResult(result)) return result.error || 'Error';
+        if (isErrorResult(result)) return 'Error: ' + (result.error || 'Unknown error');
         if (result === undefined) return '';
         if (typeof result === 'string') return result;
         return JSON.stringify(result);

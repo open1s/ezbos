@@ -70,7 +70,7 @@ async function main() {
   const started = await agent.start();
 
   console.log('\n--- Running agent with hooks ---');
-  const result = await started.ask('Hello');
+  const result = await started.ask('What is 10 + 20? Use the Add tool.');
   console.log(`Result: ${result}`);
 
   await started.close();

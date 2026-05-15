@@ -1,4 +1,7 @@
+import { initTracing } from '@open1s/jsbos';
 import { BrainOS, defineTool, version } from '../src/index.js';
+
+initTracing();
 
 async function main() {
   console.log(`\n=== 06-session.ts - Session API Demo (v${version()}) ===\n`);
@@ -16,47 +19,48 @@ async function main() {
 
   const started = await agent.start();
 
-  console.log('--- Session persistence (multi-turn conversation) ---');
+  console.log('--- Multi-turn conversation ---');
 
   await started.ask('My name is Alice');
-  console.log('After Q1, session chars:', started.session.export().length);
+  console.log('After Q1, session chars:', started.exportSession().length);
 
   await started.ask('What is 2 + 2?');
-  console.log('After Q2, session chars:', started.session.export().length);
+  console.log('After Q2, session chars:', started.exportSession().length);
 
   await started.ask('What is my name?');
-  console.log('After Q3, session chars:', started.session.export().length);
+  console.log('After Q3, session chars:', started.exportSession().length);
 
-  console.log('\n--- Session compact ---');
-  const beforeCompact = started.session.export().length;
-  started.session.compact(2, 500);
-  const afterCompact = started.session.export().length;
-  console.log(`Before compact: ${beforeCompact} chars`);
-  console.log(`After compact: ${afterCompact} chars`);
+  console.log('\n--- Session compact (LLM summary) ---');
+  const sessionBefore = started.exportSession().length;
+  console.log('Session before compact:', sessionBefore, 'chars');
+
+  await started.compactSession();
+  const afterCompact = started.exportSession().length;
+  console.log('After compactSession:', afterCompact, 'chars');
+
+  console.log('\n--- Verify compact worked ---');
+  const verifyResult = await started.ask('What is my name?');
+  console.log('Verify:', verifyResult.trim());
 
   console.log('\n--- Session export / import ---');
-  const json = started.session.export();
-  console.log('Export (first 200 chars):', json.substring(0, 200), '...');
+  const json = started.exportSession();
+  console.log('Export (first 150 chars):', json.substring(0, 150), '...');
 
-  console.log('\n--- Session clear ---');
-  started.session.clear();
-  console.log('Session cleared, export length:', started.session.export().length);
-
-  console.log('\n--- SessionManager methods (fluent API) ---');
+  console.log('\n--- SessionManager fluent API ---');
   const agent2 = brain.agent('session-demo-2')
     .with_tools(greetingTool)
     .with_systemPrompt('You are a friendly assistant.');
   const started2 = await agent2.start();
 
   await started2.ask('Say hello to Bob');
-  const sessionJson = started2.session.export();
+  const sessionJson = started2.exportSession();
   console.log('Session before import length:', sessionJson.length);
 
-  started2.session.clear();
-  console.log('After clear, length:', started2.session.export().length);
+  started2.clearSession();
+  console.log('After clear, length:', started2.exportSession().length);
 
-  started2.session.import(sessionJson);
-  console.log('After import, length:', started2.session.export().length);
+  started2.importSession(sessionJson);
+  console.log('After import, length:', started2.exportSession().length);
 
   await started.close();
   await started2.close();

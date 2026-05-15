@@ -18,28 +18,33 @@ async function main() {
   console.log('Quick agent tools:', quickAgent.tools);
   console.log('Quick agent config:', quickAgent.config);
 
-  console.log('\n--- Agent stream() ---');
-  let tokenCount = 0;
+  console.log('\n--- Agent stream() - Real-time chat ---');
   const streamAgent = brain.agent('stream-demo')
     .with_tools(addTool)
-    .with_maxTokens(50);
+    .with_systemPrompt('You are a helpful assistant.');
 
   const started = await streamAgent.start();
 
-console.log('Streaming tokens:');
-  let streamedTokens: any[] = [];
-  await started.stream('What is 5 + 3?', (token) => {
-    streamedTokens.push(token);
+  console.log('Streaming response:');
+  let streamedText = '';
+  await started.stream('What is 5 + 3? And what is the capital of France?', (token) => {
+     if(token.type === 'Text') {
+        process.stdout.write(token.text);
+     }
+     if(token.type === 'ReasoningContent') {
+        process.stdout.write(token.text);
+     }
   });
-  console.log('Streamed token count:', streamedTokens.length);
-  console.log('First streamed token:', streamedTokens[0]);
-  console.log('Last streamed token:', streamedTokens[streamedTokens.length - 1]);
+  console.log('\n\nStreamed text length:', streamedText.length);
 
   console.log('\n--- Agent streamCollect() ---');
   const tokens = await started.streamCollect('What is 10 + 20?');
   console.log('Collected', tokens.length, 'tokens');
-  console.log('First token:', tokens[0]);
-  console.log('Last token:', tokens[tokens.length - 1]);
+  const textTokens = tokens.filter(t => t.text);
+  console.log('Text tokens:', textTokens.length);
+  if (textTokens.length > 0) {
+    console.log('Collected text:', textTokens.map(t => t.text).join(''));
+  }
 
   console.log('\n--- Agent metrics ---');
   const metrics = started.metrics;

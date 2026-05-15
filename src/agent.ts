@@ -2,6 +2,7 @@ import * as jsbos from '@open1s/jsbos';
 import { jsbos as jsbosDefault, InternalToolDef } from './tool.js';
 import { HookEvent, HookCallback, mergeHooks } from './hook.js';
 import { PluginHandlers, mergePlugins } from './plugin.js';
+import { SkillDef } from './skills.js';
 
 const DEFAULT_MODEL = 'nvidia/meta/llama-3.1-8b-instruct';
 const DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
@@ -13,6 +14,7 @@ export class AgentBuilder {
   private _plugins: PluginHandlers[] = [];
   private _mcp: Array<{ type: 'process' | 'http', namespace: string, command?: string, args?: string[], url?: string }> = [];
   private _skillsDirs: string[] = [];
+  private _inlineSkills: SkillDef[] = [];
   private _config: {
     name: string;
     model: string;
@@ -141,6 +143,11 @@ export class AgentBuilder {
     return this;
   }
 
+  with_skills(...skills: SkillDef[]): this {
+    this._inlineSkills.push(...skills);
+    return this;
+  }
+
   with_resilience(opts: {
     circuitBreakerMaxFailures?: number;
     circuitBreakerCooldownSecs?: number;
@@ -196,10 +203,22 @@ export class AgentBuilder {
     for (const plugin of this._plugins) {
       this._inner.registerPlugin(
         plugin.name || 'plugin',
-        plugin.on_llm_request as any,
-        plugin.on_llm_response as any,
-        plugin.on_tool_call as any,
-        plugin.on_tool_result as any
+        plugin.on_llm_request ? ((err: any, arg: any) => {
+          if (err) return;
+          return plugin.on_llm_request!(arg);
+        }) : undefined,
+        plugin.on_llm_response ? ((err: any, arg: any) => {
+          if (err) return;
+          return plugin.on_llm_response!(arg);
+        }) : undefined,
+        plugin.on_tool_call ? ((err: any, arg: any) => {
+          if (err) return;
+          return plugin.on_tool_call!(arg);
+        }) : undefined,
+        plugin.on_tool_result ? ((err: any, arg: any) => {
+          if (err) return;
+          return plugin.on_tool_result!(arg);
+        }) : undefined
       );
     }
 
@@ -211,14 +230,62 @@ export class AgentBuilder {
       }
     }
 
+    let systemPrompt = this._config.systemPrompt || '';
+
     for (const dir of this._skillsDirs) {
       await this._inner.registerSkillsFromDir(dir);
     }
 
-    return new Agent(this._inner);
+    for (const skill of this._inlineSkills) {
+      const addition = `\n\n# Skill: ${skill.name}\n${skill.content}`;
+      systemPrompt += addition;
+    }
+
+    if (systemPrompt !== this._config.systemPrompt) {
+      this._config.systemPrompt = systemPrompt;
+      const newAgent = await this.rebuildAgentWithPrompt(systemPrompt);
+      this._inner = newAgent;
+    }
+
+    return new Agent(this._inner!);
+  }
+
+  private async rebuildAgentWithPrompt(newPrompt: string): Promise<jsbos.Agent> {
+    const newAgent = await jsbos.Agent.create({
+      name: this._config.name,
+      model: this._config.model,
+      baseUrl: this._config.baseUrl,
+      apiKey: this._config.apiKey || '',
+      systemPrompt: newPrompt,
+      temperature: this._config.temperature,
+      timeoutSecs: this._config.timeoutSecs,
+      maxTokens: this._config.maxTokens,
+    });
+    for (const tool of this._tools) {
+      newAgent.addTool(
+        tool.name,
+        tool.description,
+        JSON.stringify(tool.schema.properties || {}),
+        JSON.stringify(tool.schema),
+        (err: any, args: any) => {
+          if (err) return String(err);
+          try {
+            return tool.callback(args);
+          } catch (e: any) {
+            return String(e);
+          }
+        }
+      );
+    }
+    return newAgent;
   }
 
   async ask(prompt: string): Promise<string> {
+    if (!this._inner) await this.start();
+    return this._inner!.react(prompt);
+  }
+
+  async runSimple(prompt: string): Promise<string> {
     if (!this._inner) await this.start();
     return this._inner!.runSimple(prompt);
   }
@@ -237,11 +304,51 @@ export class Agent {
   }
 
   async ask(prompt: string): Promise<string> {
+    return this._inner.react(prompt);
+  }
+
+  async runSimple(prompt: string): Promise<string> {
     return this._inner.runSimple(prompt);
   }
 
   async react(task: string): Promise<string> {
     return this._inner.react(task);
+  }
+
+  async compactSession(): Promise<void> {
+    const sessionJson = this._inner.getSessionJson();
+
+    const compactedJson = await this.ask(`Compact this session JSON. Preserve all important context, facts, and decisions while removing redundant messages. Return ONLY valid JSON. Use exact role names: "System", "User", "Assistant", "AssistantToolCall", "ToolResult".\n\nSession JSON:\n${sessionJson}`);
+
+    let cleaned = compactedJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    cleaned = cleaned.replace(/"user"/g, '"User"')
+                     .replace(/"assistant"/g, '"Assistant"')
+                     .replace(/"system"/g, '"System"')
+                     .replace(/"toolresult"/g, '"ToolResult"')
+                     .replace(/"assistanttoolcall"/g, '"AssistantToolCall"');
+
+    this._inner.restoreSessionJson(cleaned);
+  }
+
+  saveSession(path: string): void {
+    this._inner.saveSession(path);
+  }
+
+  restoreSession(path: string): void {
+    this._inner.restoreSessionFromFile(path);
+  }
+
+  clearSession(): void {
+    this._inner.clearSession();
+  }
+
+  exportSession(): string {
+    return this._inner.getSessionJson();
+  }
+
+  importSession(json: string): void {
+    this._inner.restoreSessionJson(json);
   }
 
   stream(task: string, onToken: (token: any) => void): Promise<void> {
@@ -256,19 +363,15 @@ export class Agent {
 
   async streamCollect(task: string): Promise<any[]> {
     const tokens: any[] = [];
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve) => {
       this.stream(task, token => {
         tokens.push(token);
-        if (token.type === 'Done' || token.type === 'Error') {
-          token.type === 'Error' ? reject(new Error(token.error)) : resolve();
+        if (token.type === 'Done') {
+          resolve();
         }
       });
     });
     return tokens;
-  }
-
-  get session(): SessionManager {
-    return new SessionManager(this._inner);
   }
 
   get tools(): string[] {
@@ -297,38 +400,5 @@ export class Agent {
 
   async close(): Promise<void> {
     this._inner.close();
-  }
-}
-
-export class SessionManager {
-  constructor(private _inner: jsbos.Agent) {}
-
-  save(path: string): this {
-    this._inner.saveSession(path);
-    return this;
-  }
-
-  restore(path: string): this {
-    this._inner.restoreSessionFromFile(path);
-    return this;
-  }
-
-  compact(keepRecent: number = 10, maxSummaryChars: number = 2000): this {
-    this._inner.compactSession(keepRecent, maxSummaryChars);
-    return this;
-  }
-
-  clear(): this {
-    this._inner.clearSession();
-    return this;
-  }
-
-  export(): string {
-    return this._inner.getSessionJson();
-  }
-
-  import(json: string): this {
-    this._inner.restoreSessionJson(json);
-    return this;
   }
 }

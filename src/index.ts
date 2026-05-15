@@ -7,7 +7,6 @@ export * from './hook.js';
 export * from './plugin.js';
 export * from './mcp.js';
 export * from './skills.js';
-export * from './session.js';
 export * from './agent.js';
 export * from './brainos.js';
 

@@ -1,15 +1,19 @@
 import { BrainOS, defineSkill, SkillsBuilder, version } from '../src/index.js';
+import { initTracing } from '@open1s/jsbos';
+
+initTracing();
+
 
 async function main() {
   console.log(`\n=== 05-skills.ts - Skills API Demo (v${version()}) ===\n`);
 
   console.log('--- defineSkill ---');
-  const skill = defineSkill('my-skill', 'You are a math expert. Always show your work.');
+  const skill = defineSkill('math-expert', 'You are a math expert. Always show your work step by step.');
   console.log('Skill:', skill);
 
   console.log('\n--- SkillsBuilder ---');
   const builder = new SkillsBuilder()
-    .from_dir('./my-skills-dir')
+    .from_dir('./skills')
     .add('code-review', 'You are a code reviewer. Be thorough.')
     .add('api-design', 'You are an API designer. Follow REST best practices.');
 
@@ -21,15 +25,16 @@ async function main() {
   const brain = new BrainOS();
   await brain.start();
 
-  console.log('\n--- Agent with tools (skills loaded from dir in real usage) ---');
+  console.log('\n--- Agent with skills from directory ---');
   const agent = brain.agent('skills-demo')
-    .with_tools()
     .with_skills_dir('./skills');
 
   const started = await agent.start();
-  console.log('Agent started with skills_dir configured');
-  console.log('Agent tools:', started.tools);
-  console.log('Agent config:', started.config);
+  console.log('Agent started with skills configured');
+
+  console.log('\n--- LLM call with skills ---');
+  const result = await started.ask('Review this code for potential bugs: function greet(name) { return "Hello, " + name; }');
+  console.log('Result:', result);
 
   await started.close();
   await brain.stop();

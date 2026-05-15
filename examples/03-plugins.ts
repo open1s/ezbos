@@ -71,7 +71,7 @@ async function main() {
 
   const started = await agent.start();
   console.log('Running agent with plainPlugin...');
-  await started.ask('What is 1 + 1?');
+  await started.ask('Use the Add tool to calculate 5 + 3.');
 
   console.log('\n--- Agent with decorated class plugin ---');
   const agent2 = brain.agent('plugins-demo-2')
@@ -79,7 +79,7 @@ async function main() {
     .with_plugins(decorated);
 
   const started2 = await agent2.start();
-  await started2.ask('Hello');
+  await started2.ask('Use the Add tool to calculate 7 + 3.');
 
   await started.close();
   await started2.close();

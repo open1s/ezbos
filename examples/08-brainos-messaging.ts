@@ -32,20 +32,49 @@ async function main() {
   const callResult = await callerClient.call('10,20');
   console.log('[CallerClient] Result for 10,20:', callResult);
 
-  console.log('\n--- PublisherWrapper ---');
+  console.log('\n--- Publisher/Subscriber pattern (recv) ---');
+  const sub1 = await brain.subscriber('test-topic');
+  console.log('Subscriber topic:', sub1.topic);
+
   const pub = await brain.publisher('test-topic');
   console.log('Publisher topic:', pub.topic);
   await pub.text('Hello from PublisherWrapper!');
   await pub.json({ msg: 'structured', value: 123 });
   console.log('Published via PublisherWrapper.text() and .json()');
 
-  console.log('\n--- SubscriberWrapper recv ---');
-  const sub = await brain.subscriber('test-topic');
-  console.log('Subscriber topic:', sub.topic);
-  const msg = await sub.recv(3000);
-  console.log('[Subscriber] Received:', msg);
-  await sub.stop();
+  console.log('Waiting for messages...');
+  const msg1 = await sub1.recv(3000);
+  console.log('[Subscriber] Received 1:', msg1);
+  const msg2 = await sub1.recv(3000);
+  console.log('[Subscriber] Received 2:', msg2);
+  await sub1.stop();
 
+  console.log('\n--- Publisher/Subscriber pattern (run) ---');
+  const sub2 = await brain.subscriber('run-topic');
+  const pub2 = await brain.publisher('run-topic');
+
+  console.log('Starting subscriber with run()...');
+  const runPromise = sub2.run((msg) => {
+    console.log('[Subscriber.run] Received:', msg);
+  });
+
+  await pub2.text('Message 1 via run');
+  await pub2.text('Message 2 via run');
+  await pub2.json({ action: 'test', id: 42 });
+
+  await new Promise(r => setTimeout(r, 1000));
+  await sub2.stop();
+  await runPromise;
+
+  console.log('\n--- Agent with messaging integration ---');
+  const agent = brain.agent('messaging-demo')
+    .with_systemPrompt('You are a helpful assistant. When asked about messaging, explain the patterns.');
+
+  const started = await agent.start();
+  const messagingResult = await started.ask('Explain the difference between Query and Publisher messaging patterns.');
+  console.log('Agent response:', messagingResult);
+
+  await started.close();
   await brain.stop();
   console.log('\nDone.');
   process.exit(0);

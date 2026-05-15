@@ -1,26 +1,30 @@
 import { BrainOS, defineTool, tool, ok, err, isErrorResult, version } from '../src/index.js';
 
+import {initTracing} from "@open1s/jsbos";
+
+// initTracing();
+
 const addTool = defineTool('Add', 'Add two numbers')
   .required('a', 'number', 'First number')
   .required('b', 'number', 'Second number')
-  .handle((args: any) => { console.info('Adding numbers:', args.a, args.b); return args.a + args.b; });
+  .handle((args: any) => { console.error('Adding numbers:', args.a, args.b); return args.a + args.b; });
 
 const multiplyTool = defineTool('Multiply', 'Multiply two numbers')
   .required('x', 'number', 'First number')
   .required('y', 'number', 'Second number')
-  .handle((args: any) => { console.info('Multiplying numbers:', args.x, args.y); return args.x * args.y; });
+  .handle((args: any) => { console.error('Multiplying numbers:', args.x, args.y); return args.x * args.y; });
 
 const stringConcatTool = defineTool('Concat', 'Concatenate two strings')
   .param('str1', 'string', 'First string')
   .param('str2', 'string', 'Second string')
   .param('separator', 'string', 'Separator', ', ')
-  .handle((args: any) => { console.info('Concatenating strings:', args.str1, args.str2, args.separator); return args.str1 + args.separator + args.str2; });
+  .handle((args: any) => { console.error('Concatenating strings:', args.str1, args.str2, args.separator); return args.str1 + args.separator + args.str2; });
 
 const divideTool = defineTool('Divide', 'Divide two numbers')
   .required('n', 'number', 'Numerator')
   .required('d', 'number', 'Denominator')
   .handle((args: any) => {
-    console.info('Dividing numbers:', args.n, args.d);
+    console.error('Dividing numbers:', args.n, args.d);
     if (args.d === 0) return err('Division by zero');
     return ok(args.n / args.d);
   });
@@ -28,7 +32,7 @@ const divideTool = defineTool('Divide', 'Divide two numbers')
 const asyncWeatherTool = defineTool('Weather', 'Get weather for a city')
   .required('city', 'string', 'City name')
   .handle((args: any) => {
-    console.info('Fetching weather for city:', args.city);
+    console.error('Fetching weather for city:', args.city);
     return ok({ city: args.city, temp: 22, condition: 'sunny', unit: 'celsius' });
   });
 
@@ -79,5 +83,3 @@ async function main() {
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
-
-main().catch(console.error);

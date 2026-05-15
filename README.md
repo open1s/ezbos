@@ -30,21 +30,34 @@ await started.close();
 await brain.stop();
 ```
 
-## Core API
+## Configuration
 
-### BrainOS
+Place a `brainos.json` in your project root:
 
-The main entry point. Manages the message bus and agent lifecycle.
-
-```ts
-const brain = new BrainOS({ model?: string, baseUrl?: string, apiKey?: string });
-await brain.start();
-await brain.stop();
+```json
+{
+  "global_model": {
+    "model": "nvidia/meta/llama-3.1-8b-instruct",
+    "base_url": "https://integrate.api.nvidia.com/v1",
+    "api_key": "your-key"
+  }
+}
 ```
 
-### Agent Builder
+BrainOS auto-discovers this config on `start()`. You can also pass options directly:
 
-Fluent builder for creating agents.
+```ts
+const brain = new BrainOS({
+  model: 'nvidia/meta/llama-3.1-8b-instruct',
+  baseUrl: 'https://integrate.api.nvidia.com/v1',
+  apiKey: 'nvapi-xxx',
+});
+await brain.start();
+```
+
+## Agent Builder
+
+Fluent builder for creating agents:
 
 ```ts
 const agent = brain.agent('name')
@@ -67,193 +80,388 @@ const agent = brain.agent('name')
 const started = await agent.start();
 ```
 
-### Agent (Started)
+### Resilience
 
-The running agent instance.
+Configure circuit breaker and rate limiting:
 
 ```ts
-// LLM calls
-const result = await started.ask('Hello');
-const result2 = await started.react('Task');
-const result3 = await started.runSimple('Simple task');
-
-// Streaming
-await started.stream('Task', (token) => {
-  if (token.text) process.stdout.write(token.text);
+agent.with_resilience({
+  circuitBreakerMaxFailures: 3,    // trip after 3 failures
+  circuitBreakerCooldownSecs: 10,  // wait 10s before retry
+  rateLimitCapacity: 5,            // allow 5 requests
+  rateLimitWindowSecs: 60,         // per 60 seconds
+  rateLimitMaxRetries: 3,          // retry 3 times when limited
 });
-const tokens = await started.streamCollect('Task');
-
-// Session management
-await started.compactSession();    // AI-powered session compaction
-started.saveSession('./session.json');
-started.restoreSession('./session.json');
-started.clearSession();
-const json = started.exportSession();
-started.importSession(json);
-
-// Metrics
-const metrics = started.metrics;
-started.resetMetrics();
-
-// Info
-console.log(started.tools);    // ['Tool1', 'Tool2']
-console.log(started.config);   // { model, baseUrl, ... }
-
-await started.close();
 ```
 
-### Tools
+## Tools
 
 Define tools the LLM can call.
 
+### Simple Tool
+
 ```ts
-import { tool, defineTool, ok, err } from '@open1s/ezbos';
+import { tool } from '@open1s/ezbos';
 
-// Simple tool
 const add = tool('Add', 'Add two numbers', (args) => String(args.a + args.b));
+```
 
-// Builder API with schema
+### Tool Builder
+
+For tools with schema and optional parameters:
+
+```ts
+import { defineTool, ok, err } from '@open1s/ezbos';
+
 const greet = defineTool('Greet', 'Greet someone')
   .required('name', 'string', 'Name to greet')
-  .optional('language', 'string', 'Language code', 'en')
+  .param('language', 'string', 'Language code', 'en')
   .handle((args) => `Hello, ${args.name}!`);
 
-// Result helpers
+const divide = defineTool('Divide', 'Divide two numbers')
+  .required('n', 'number', 'Numerator')
+  .required('d', 'number', 'Denominator')
+  .handle((args) => {
+    if (args.d === 0) return err('Division by zero');
+    return ok(args.n / args.d);
+  });
+```
+
+### Result Helpers
+
+```ts
 const success = ok({ value: 42 }, { cached: true });
 const failure = err('Not found', { code: 404 });
 ```
 
-### Hooks
+**Note:** Tool callbacks must be synchronous. The underlying jsbos native layer does not support async tool callbacks.
+
+## Hooks
 
 Intercept agent lifecycle events.
 
 ```ts
 import { HookEvent, defineHook } from '@open1s/ezbos';
 
-const hook = defineHook(HookEvent.BeforeToolCall, (ctx) => {
-  console.log('About to call:', ctx.toolName);
+const logHook = defineHook(HookEvent.BeforeToolCall, (ctx) => {
+  console.log('About to call:', ctx.data?.tool_name);
   return 'continue';  // or 'abort'
 });
 
-agent.with_hooks(hook);
+agent.with_hooks(logHook);
 ```
 
-Events: `BeforeToolCall`, `AfterToolCall`, `BeforeLlmCall`, `AfterLlmCall`, `OnMessage`, `OnComplete`, `OnError`
+Available events:
 
-### Plugins
+| Event | Description |
+|-------|-------------|
+| `BeforeToolCall` | Before a tool is invoked |
+| `AfterToolCall` | After a tool returns |
+| `BeforeLlmCall` | Before sending to LLM |
+| `AfterLlmCall` | After receiving from LLM |
+| `OnMessage` | On each message |
+| `OnComplete` | When task completes |
+| `OnError` | On error |
+
+### Merge Hooks
+
+```ts
+import { mergeHooks } from '@open1s/ezbos';
+
+const allHooks = mergeHooks(beforeHook, afterHook, beforeLlmHook);
+agent.with_hooks(allHooks);
+```
+
+## Plugins
 
 Register plugins for LLM/tool lifecycle events.
 
-```ts
-const plugin = {
-  name: 'logger',
-  on_llm_request: (req) => console.log('LLM request:', req),
-  on_llm_response: (res) => console.log('LLM response:', res),
-  on_tool_call: (call) => console.log('Tool call:', call),
-  on_tool_result: (result) => console.log('Tool result:', result),
-};
+### Plain Plugin
 
+```ts
+import { definePlugin } from '@open1s/ezbos';
+
+const loggerPlugin = definePlugin({
+  name: 'logger',
+  on_llm_request: (req) => { console.log('LLM request:', req.model); return req; },
+  on_llm_response: (resp) => { console.log('LLM response'); return resp; },
+  on_tool_call: (call) => { console.log('Tool call:', call.name); return call; },
+  on_tool_result: (result) => { console.log('Tool result'); return result; },
+});
+
+agent.with_plugins(loggerPlugin);
+```
+
+### Class-based Plugin
+
+```ts
+import { getPluginHandlers } from '@open1s/ezbos';
+
+class MyPlugin {
+  __pluginName = 'my-plugin';
+
+  on_llm_request(req: any) { return req; }
+  on_llm_response(resp: any) { return resp; }
+  on_tool_call(call: any) { return call; }
+  on_tool_result(result: any) { return result; }
+}
+
+const plugin = new MyPlugin();
+const handlers = getPluginHandlers(plugin);
 agent.with_plugins(plugin);
 ```
 
-### MCP
-
-Connect to MCP servers.
+### Merge Plugins
 
 ```ts
-// Process-based MCP
-agent.with_mcp_process('fs', 'npx', ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']);
+import { mergePlugins } from '@open1s/ezbos';
 
-// HTTP-based MCP
-agent.with_mcp_http('math', 'http://127.0.0.1:8000/mcp');
+const merged = mergePlugins(pluginA, pluginB);
+agent.with_plugins(merged);
 ```
 
-### Skills
+## MCP
+
+Connect to MCP (Model Context Protocol) servers.
+
+### Process-based
+
+```ts
+import { defineMcpProcess } from '@open1s/ezbos';
+
+const config = defineMcpProcess('files', 'npx', [
+  '-y', '@modelcontextprotocol/server-filesystem', '/tmp'
+]);
+
+agent.with_mcp_process('files', 'npx', [
+  '-y', '@modelcontextprotocol/server-filesystem', '/tmp'
+]);
+```
+
+### HTTP-based
+
+```ts
+import { defineMcpHttp } from '@open1s/ezbos';
+
+const config = defineMcpHttp('hello-mcp', 'http://127.0.0.1:8000/mcp');
+
+agent.with_mcp_http('hello-mcp', 'http://127.0.0.1:8000/mcp');
+```
+
+### MCP Builder
+
+```ts
+import { McpBuilder } from '@open1s/ezbos';
+
+const configs = new McpBuilder()
+  .process('files', 'npx', ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])
+  .http('hello-mcp', 'http://127.0.0.1:8000/mcp')
+  .build();
+```
+
+### List MCP Tools
+
+```ts
+const mcpTools = await started.listMcpTools();
+console.log(`MCP tools available: ${mcpTools.length}`);
+```
+
+## Skills
 
 Add domain-specific instructions to the system prompt.
 
-```ts
-// Directory-based (auto-discovers SKILL.md files)
-agent.with_skills_dir('./skills');
+### Define Skill
 
-// Inline skills
-agent.with_skills({
-  name: 'Code Review',
-  content: 'When reviewing code, check for: security, performance, readability...'
-});
+```ts
+import { defineSkill } from '@open1s/ezbos';
+
+const skill = defineSkill('math-expert', 'You are a math expert. Always show your work step by step.');
 ```
 
-### Messaging
+### Directory-based
+
+Auto-discovers `SKILL.md` files in a directory:
+
+```ts
+agent.with_skills_dir('./skills');
+```
+
+Directory structure:
+```
+skills/
+  code-review/
+    SKILL.md
+```
+
+### Skills Builder
+
+```ts
+import { SkillsBuilder } from '@open1s/ezbos';
+
+const built = new SkillsBuilder()
+  .from_dir('./skills')
+  .add('code-review', 'You are a code reviewer. Be thorough.')
+  .add('api-design', 'You are an API designer. Follow REST best practices.')
+  .build();
+```
+
+## Agent (Started)
+
+The running agent instance.
+
+### LLM Calls
+
+```ts
+// ReAct loop (tools + reasoning)
+const result = await started.ask('What is 5 + 3?');
+
+// ReAct with explicit task
+const result2 = await started.react('Calculate the sum');
+
+// Simple LLM call (no tools)
+const result3 = await started.runSimple('Say hello');
+```
+
+### Streaming
+
+```ts
+// Stream tokens
+await started.stream('Task', (token) => {
+  if (token.type === 'Text') process.stdout.write(token.text);
+  if (token.type === 'ReasoningContent') process.stdout.write(token.text);
+});
+
+// Collect all tokens
+const tokens = await started.streamCollect('Task');
+const text = tokens.filter(t => t.text).map(t => t.text).join('');
+```
+
+### Session Management
+
+```ts
+// AI-powered compaction (replaces old messages with LLM summary)
+await started.compactSession();
+
+// Save/restore
+started.saveSession('./session.json');
+started.restoreSession('./session.json');
+
+// Clear
+started.clearSession();
+
+// Export/import as JSON
+const json = started.exportSession();
+started.importSession(json);
+```
+
+### Metrics
+
+```ts
+const metrics = started.metrics;
+console.log(metrics.llmCallCount);
+console.log(metrics.toolInvocationCount);
+console.log(metrics.totalWallTimeUs);
+
+started.resetMetrics();
+```
+
+### Info
+
+```ts
+console.log(started.tools);    // ['Add', 'Greet']
+console.log(started.config);   // { model, baseUrl, temperature, ... }
+```
+
+## Messaging
 
 Pub/sub, query, and RPC patterns via the message bus.
 
+### Publisher / Subscriber
+
 ```ts
-// Publisher / Subscriber
+// Publisher
 const pub = await brain.publisher('events');
 await pub.text('Hello');
 await pub.json({ event: 'click', x: 100 });
 
+// Subscriber - recv with timeout
 const sub = await brain.subscriber('events');
-const msg = await sub.recv(3000);           // recv with timeout
-await sub.run((msg) => console.log(msg));   // continuous processing
-await sub.stop();
+const msg = await sub.recv(3000);
 
-// Query / Queryable (request-response)
-const server = await brain.queryable('math', (input) => String(parseInt(input) * 2));
+// Subscriber - continuous processing
+const sub2 = await brain.subscriber('events');
+await sub2.run((msg) => console.log('Received:', msg));
+await sub2.stop();
+```
+
+### Query / Queryable (request-response)
+
+```ts
+// Server
+const server = await brain.queryable('math', (input) => {
+  const n = parseInt(input);
+  return String(n * n);
+});
 await server.start();
 
+// Client
 const client = await brain.query('math');
-const response = await client.ask('21');  // "42"
+const response = await client.ask('21', 5000);  // "441"
+```
 
-// Caller / Callable (RPC)
+### Caller / Callable (RPC)
+
+```ts
+// Server
 const rpcServer = await brain.callable('add', (input) => {
   const [a, b] = input.split(',').map(Number);
   return String(a + b);
 });
 await rpcServer.start();
 
+// Client
 const rpcClient = await brain.caller('add');
 const result = await rpcClient.call('10,20');  // "30"
 ```
 
-### Quick Agent
+## Quick Agent
 
-One-liner to create and start an agent.
+One-liner to create and start an agent:
 
 ```ts
-const agent = await BrainOS.with('assistant', { model: '...', apiKey: '...' });
+import { BrainOS } from '@open1s/ezbos';
+
+const agent = await BrainOS.with('assistant', {
+  model: 'nvidia/meta/llama-3.1-8b-instruct',
+  apiKey: 'nvapi-xxx',
+});
 const result = await agent.ask('Hello');
 await agent.close();
 ```
 
 ## Examples
 
+| Example | Description |
+|---------|-------------|
+| `01-tools.ts` | Tool definitions (required/optional params), ok/err results, isErrorResult, error handling |
+| `02-hooks.ts` | All 7 hook events, defineHook, mergeHooks, hook registry |
+| `03-plugins.ts` | Plain plugins, class-based plugins, getPluginHandlers, mergePlugins |
+| `04-mcp.ts` | Process-based MCP, HTTP MCP, McpBuilder, listMcpTools |
+| `05-skills.ts` | defineSkill, SkillsBuilder, skill directories |
+| `06-session.ts` | Multi-turn conversation, compactSession, save/restore, export/import |
+| `07-agent-advanced.ts` | Streaming, streamCollect, metrics, resilience, config |
+| `08-brainos-messaging.ts` | Query/Queryable, Caller/Callable, Publisher/Subscriber (recv + run) |
+
 ```bash
-npm run example:tools      # Tool definitions and execution
-npm run example:hooks      # Lifecycle hooks
-npm run example:plugins    # Plugin system
-npm run example:mcp        # MCP server integration
-npm run example:skills     # Skills and skill directories
-npm run example:session    # Session management + AI compaction
-npm run example:agent      # Streaming, metrics, resilience
-npm run example:messaging  # Pub/sub, query, RPC patterns
+npm run example:tools
+npm run example:hooks
+npm run example:plugins
+npm run example:mcp
+npm run example:skills
+npm run example:session
+npm run example:agent
+npm run example:messaging
 ```
-
-## Configuration
-
-Place a `brainos.json` in your project root:
-
-```json
-{
-  "global_model": {
-    "model": "nvidia/meta/llama-3.1-8b-instruct",
-    "base_url": "https://integrate.api.nvidia.com/v1",
-    "api_key": "your-key"
-  }
-}
-```
-
-BrainOS auto-discovers this config on `start()`.
 
 ## License
 

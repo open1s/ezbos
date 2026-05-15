@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+.jj/
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Turbo
+.turbo/
+
+# parcel
+.parcel-cache/

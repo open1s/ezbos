@@ -1,0 +1,42 @@
+{
+  "name": "@open1s/ezbos",
+  "version": "1.0.0",
+  "description": "Simple BrainOS - Easy wrapper for @open1s/jsbos",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test",
+    "example:tools": "tsx examples/01-tools.ts",
+    "example:hooks": "tsx examples/02-hooks.ts",
+    "example:plugins": "tsx examples/03-plugins.ts",
+    "example:mcp": "tsx examples/04-mcp.ts",
+    "example:skills": "tsx examples/05-skills.ts",
+    "example:session": "tsx examples/06-session.ts",
+    "example:agent": "tsx examples/07-agent-advanced.ts",
+    "example:messaging": "tsx examples/08-brainos-messaging.ts"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "brainos",
+    "ezbos"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@open1s/jsbos": "^2.1.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3"
+  }
+}

@@ -351,7 +351,7 @@ export class Agent {
     this._inner.restoreSessionJson(json);
   }
 
-  stream(task: string, onToken: (token: any) => void): Promise<void> {
+  stream(task: string, onToken: (token: any) => void): Promise<string> {
     return this._inner.stream(task, (err, token) => {
       if (err) {
         onToken({ type: 'Error', error: err.message });

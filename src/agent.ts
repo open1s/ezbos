@@ -294,6 +294,11 @@ export class AgentBuilder {
     if (!this._inner) await this.start();
     return this._inner!.react(task);
   }
+
+  async stop() {
+    if (!this._inner) return;
+    this._inner!.stop();
+  }
 }
 
 export class Agent {

@@ -33,7 +33,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@open1s/jsbos": "^2.1.4"
+    "@open1s/jsbos": "^2.2.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

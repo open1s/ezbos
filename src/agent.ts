@@ -403,7 +403,12 @@ export class Agent {
     this._inner.resetPerfMetrics();
   }
 
+  async stop(): Promise<void> {
+    this._inner.stop();
+  }
+
   async close(): Promise<void> {
+    this._inner.stop();
     this._inner.close();
   }
 }

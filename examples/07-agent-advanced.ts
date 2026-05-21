@@ -77,6 +77,18 @@ async function main() {
   console.log('Resilient agent configured with circuit breaker + rate limiting');
   console.log('Resilient agent config:', resilientStarted.config);
 
+  console.log('\n--- Agent.stop() - Stop running agent ---');
+  const stopAgent = brain.agent('stop-demo')
+    .with_systemPrompt('You are a helpful assistant that responds slowly.');
+  
+  const stoppable = await stopAgent.start();
+  console.log('Agent started, calling stop()...');
+  stopAgent.stop();
+  console.log('Agent stopped successfully');
+  console.log('Agent tools:', stoppable.tools);
+
+  await stoppable.close();
+
   await resilientStarted.close();
   await brain.stop();
   console.log('\nDone.');

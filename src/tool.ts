@@ -57,9 +57,6 @@ export class ToolBuilder {
   handle(callback: (args: Record<string, any>) => any): InternalToolDef {
     const isAsync = callback.constructor.name === 'AsyncFunction' ||
       callback.toString().startsWith('async ');
-    if (isAsync) {
-      throw new Error(`Tool "${this._name}" uses an async callback, but jsbos does not support async tool callbacks. Please use a synchronous callback instead.`);
-    }
 
     const properties: Record<string, any> = {};
     for (const [key, spec] of Object.entries(this._params)) {
@@ -74,14 +71,10 @@ export class ToolBuilder {
       required: this._required.length > 0 ? this._required : Object.keys(this._params)
     };
 
-    const wrappedCallback = (rawArgs: any): string => {
+    const wrappedCallback = async (rawArgs: any): Promise<string> => {
       try {
         const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
-        const result = callback(args);
-
-        if (result instanceof Promise) {
-          throw new Error('Async tool callbacks are not supported. Use a sync callback instead.');
-        }
+        const result = await callback(args);
 
         if (isErrorResult(result)) return 'Error: ' + (result.error || 'Unknown error');
         if (result === undefined) return '';

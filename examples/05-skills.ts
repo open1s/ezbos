@@ -27,7 +27,8 @@ async function main() {
 
   console.log('\n--- Agent with skills from directory ---');
   const agent = brain.agent('skills-demo')
-    .with_skills_dir('./skills');
+    .with_prompt('Stream! You are a poet. Always answer in exactly one short sentence.!!!')
+    .with_skills_dir('/Users/gaosg/.agents/skills')
 
   const started = await agent.start();
   console.log('Agent started with skills configured');

@@ -1,0 +1,27 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "demo",
+      "dependencies": {
+        "@open1s/ezbos": "^1.2.1",
+      },
+    },
+  },
+  "packages": {
+    "@open1s/ezbos": ["@open1s/ezbos@1.2.1", "", { "dependencies": { "@open1s/jsbos": "^2.2.8" } }, "sha512-VvWw6yjri1Mb6jikUlgqllgBzDi+ItWs2AjEMHyki9JNtvyHB3GgtbUh/1st4Iwh0JFtRBBesJnPJGwNnWU7CQ=="],
+
+    "@open1s/jsbos": ["@open1s/jsbos@2.2.8", "", { "optionalDependencies": { "@open1s/jsbos-darwin-arm64": "2.2.8", "@open1s/jsbos-linux-arm64-gnu": "2.2.8", "@open1s/jsbos-linux-x64-gnu": "2.2.8", "@open1s/jsbos-win32-arm64-msvc": "2.2.8", "@open1s/jsbos-win32-x64-msvc": "2.2.8" } }, "sha512-/IdSRUCSrIpXSm13fliXsNA5bdbE+ccoR3j+ay+0PaMvr2i2gfhUXUbHms6MFidMKlIswuxrENmKXjgzgcKwDg=="],
+
+    "@open1s/jsbos-darwin-arm64": ["@open1s/jsbos-darwin-arm64@2.2.8", "", { "os": "darwin", "cpu": "arm64" }, "sha512-5Lni3S8qr8ikxL1948aaR4gK0haJRDckNlhCGMpIdo8MG17BArfaxUzAFN2hnbe+NkdZzQbzZfRcZ85gIXwlMw=="],
+
+    "@open1s/jsbos-linux-arm64-gnu": ["@open1s/jsbos-linux-arm64-gnu@2.2.8", "", { "os": "linux", "cpu": "arm64" }, "sha512-Hf/6FIz8RISDBgHH/7O+WTpxdF4pH3VAaKWZGHStXXeRtgawDh314c9hYzibpMm8jaJe9hc/T/3jCtiHGdjcRw=="],
+
+    "@open1s/jsbos-linux-x64-gnu": ["@open1s/jsbos-linux-x64-gnu@2.2.8", "", { "os": "linux", "cpu": "x64" }, "sha512-1Wo0x6NWnqnE6VKbdF6w9aAo+lDXET2+vgrCUTGGkXVKHA9GRHYPsu/lez7+jQ1ZQ8sgbQrwEIo1isg3AVvf3Q=="],
+
+    "@open1s/jsbos-win32-arm64-msvc": ["@open1s/jsbos-win32-arm64-msvc@2.2.8", "", { "os": "win32", "cpu": "arm64" }, "sha512-okf6UCU9zbHTVH3LOENtu4E0oER83zuCVjaN963RRCmlDph7wMwnZtRigcb3oySvva5V9nyHS6At4KVdrdEcDA=="],
+
+    "@open1s/jsbos-win32-x64-msvc": ["@open1s/jsbos-win32-x64-msvc@2.2.8", "", { "os": "win32", "cpu": "x64" }, "sha512-UCvHsFootg20iL/rJ1rJG/48EMGdY8rKtc4DhBPwyyB7uAykkSWBQumok0TVh2/o2tAimYBNDzkXrLj7ul5Caw=="],
+  }
+}

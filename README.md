@@ -80,6 +80,55 @@ const agent = brain.agent('name')
 const started = await agent.start();
 ```
 
+## Multimodal Content
+
+Send images, audio, and other binary content alongside text.
+
+```ts
+import { Content, ContentPart, Binary } from '@open1s/ezbos';
+
+// Text only
+const textContent = Content.text('What is 2 + 2?');
+
+// Single image (URL)
+const imageContent = Content.image('https://example.com/photo.jpg');
+
+// Audio from base64 data
+const audioContent = Content.audio(base64Data, 'mp3');
+
+// Multi-part: text + image
+const multiContent = Content.parts([
+  ContentPart.text('Describe this image'),
+  ContentPart.image('https://example.com/photo.jpg'),
+]);
+
+// Pass to any LLM method
+const result = await agent.ask(multiContent);
+await agent.stream(multiContent, (token) => {
+  if (token.type === 'Text') process.stdout.write(token.text);
+});
+```
+
+### Content API
+
+| Method | Description |
+|--------|-------------|
+| `Content.text(text)` | Simple text content |
+| `Content.image(url, name?)` | Single image (URL) |
+| `Content.audio(data, format)` | Single audio (base64) |
+| `Content.audioUrl(url, format)` | Single audio (URL) |
+| `Content.parts([...])` | Multi-part content |
+
+### ContentPart API
+
+| Method | Description |
+|--------|-------------|
+| `ContentPart.text(text)` | Create text part |
+| `ContentPart.image(url, name?)` | Create image part |
+| `ContentPart.audio(data, format)` | Create audio part (base64) |
+| `ContentPart.audioUrl(url, format)` | Create audio part (URL) |
+| `ContentPart.binary(type, data, name?)` | Create binary part |
+
 ### Resilience
 
 Configure circuit breaker and rate limiting:
@@ -322,6 +371,25 @@ const result2 = await started.react('Calculate the sum');
 const result3 = await started.runSimple('Say hello');
 ```
 
+All methods accept multimodal content (text, images, audio):
+
+```ts
+import { Content, ContentPart } from '@open1s/ezbos';
+
+// Text + image
+const content = Content.parts([
+  ContentPart.text('What do you see?'),
+  ContentPart.image('https://example.com/photo.jpg'),
+]);
+const result = await started.ask(content);
+
+// Image only
+const imageOnly = Content.image('https://example.com/photo.jpg');
+await started.stream(imageOnly, (token) => {
+  if (token.type === 'Text') process.stdout.write(token.text);
+});
+```
+
 ### Streaming
 
 ```ts
@@ -451,6 +519,8 @@ await agent.close();
 | `06-session.ts` | Multi-turn conversation, compactSession, save/restore, export/import |
 | `07-agent-advanced.ts` | Streaming, streamCollect, metrics, resilience, config |
 | `08-brainos-messaging.ts` | Query/Queryable, Caller/Callable, Publisher/Subscriber (recv + run) |
+| `09-system-prompt.ts` | System prompt management and configuration |
+| `10-multimodal.ts` | Multimodal content (images, audio), Content/ContentPart API |
 
 ```bash
 npm run example:tools
@@ -461,6 +531,8 @@ npm run example:skills
 npm run example:session
 npm run example:agent
 npm run example:messaging
+npm run example:system-prompt
+npm run example:multimodal
 ```
 
 ## License

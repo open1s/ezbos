@@ -28,7 +28,9 @@
     "example:skills": "tsx examples/05-skills.ts",
     "example:session": "tsx examples/06-session.ts",
     "example:agent": "tsx examples/07-agent-advanced.ts",
-    "example:messaging": "tsx examples/08-brainos-messaging.ts"
+    "example:messaging": "tsx examples/08-brainos-messaging.ts",
+    "example:system-prompt": "tsx examples/09-system-prompt.ts",
+    "example:multimodal": "tsx examples/10-multimodal.ts"
   },
   "keywords": [
     "ai",

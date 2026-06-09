@@ -9,6 +9,7 @@ export * from './mcp.js';
 export * from './skills.js';
 export * from './agent.js';
 export * from './brainos.js';
+export * from './content.js';
 
 export const version = jsbos.version;
 export const initTracing = jsbos.initTracing;

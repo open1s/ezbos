@@ -3,6 +3,16 @@ import { jsbos as jsbosDefault, InternalToolDef } from './tool.js';
 import { HookEvent, HookCallback, mergeHooks } from './hook.js';
 import { PluginHandlers, mergePlugins } from './plugin.js';
 import { SkillDef } from './skills.js';
+import { Content } from './content.js';
+
+export interface JsContent {
+  type: string;
+  text?: string;
+  contentType?: string;
+  url?: string;
+  base64?: string;
+  name?: string;
+}
 
 const DEFAULT_MODEL = 'nvidia/meta/llama-3.1-8b-instruct';
 const DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
@@ -280,17 +290,17 @@ export class AgentBuilder {
     return newAgent;
   }
 
-  async ask(prompt: string): Promise<string> {
+  async ask(prompt: string | Array<JsContent>): Promise<string> {
     if (!this._inner) await this.start();
     return this._inner!.react(prompt);
   }
 
-  async runSimple(prompt: string): Promise<string> {
+  async runSimple(prompt: string | Array<JsContent>): Promise<string> {
     if (!this._inner) await this.start();
     return this._inner!.runSimple(prompt);
   }
 
-  async react(task: string): Promise<string> {
+  async react(task: string | Array<JsContent>): Promise<string> {
     if (!this._inner) await this.start();
     return this._inner!.react(task);
   }
@@ -304,20 +314,50 @@ export class AgentBuilder {
 export class Agent {
   constructor(private _inner: jsbos.Agent) {}
 
+  private _resolveContent(input: any): Array<JsContent> {
+    if (input && typeof input === 'object' && input.constructor && input.constructor.name === 'Content') {
+      if (input._text !== null && input._text !== undefined) {
+        return [{ type: 'text', text: input._text }];
+      }
+      const parts = input.toJSON();
+      if (!Array.isArray(parts)) return [{ type: 'text', text: typeof parts === 'string' ? parts : JSON.stringify(parts) }];
+      return (parts as Array<any>).map((p: any) => {
+        if (p.type === 'text') {
+          return { type: 'text', text: p.text || '' };
+        }
+        const b = p.binary || {};
+        const source = b.source || {};
+        const result: JsContent = { type: 'binary', contentType: b.content_type || 'image/jpeg', name: b.name };
+        if (source.url !== undefined) result.url = source.url;
+        else if (source.base64 !== undefined) result.base64 = source.base64;
+        else if (source.type === 'url') result.url = source.data;
+        else if (source.type === 'base64') result.base64 = source.data;
+        return result;
+      });
+    }
+    if (typeof input === 'string') {
+      return [{ type: 'text', text: input }];
+    }
+    if (Array.isArray(input)) {
+      return input;
+    }
+    return [{ type: 'text', text: String(input) }];
+  }
+
   async run(task: string): Promise<string> {
-    return this._inner.runSimple(task);
+    return this._inner.runSimple(this._resolveContent(task) as any);
   }
 
-  async ask(prompt: string): Promise<string> {
-    return this._inner.react(prompt);
+  async ask(prompt: string | Array<JsContent>): Promise<string> {
+    return this._inner.react(this._resolveContent(prompt) as any);
   }
 
-  async runSimple(prompt: string): Promise<string> {
-    return this._inner.runSimple(prompt);
+  async runSimple(prompt: string | Array<JsContent>): Promise<string> {
+    return this._inner.runSimple(this._resolveContent(prompt) as any);
   }
 
-  async react(task: string): Promise<string> {
-    return this._inner.react(task);
+  async react(task: string | Array<JsContent>): Promise<string> {
+    return this._inner.react(this._resolveContent(task) as any);
   }
 
   async compactSession(): Promise<void> {
@@ -356,8 +396,8 @@ export class Agent {
     this._inner.restoreSessionJson(json);
   }
 
-  stream(task: string, onToken: (token: any) => void): Promise<string> {
-    return this._inner.stream(task, (err, token) => {
+  stream(task: string | Array<JsContent>, onToken: (token: any) => void): Promise<string> {
+    return this._inner.stream(this._resolveContent(task) as any, (err, token) => {
       if (err) {
         onToken({ type: 'Error', error: err.message });
       } else {
@@ -366,7 +406,7 @@ export class Agent {
     });
   }
 
-  async streamCollect(task: string): Promise<any[]> {
+  async streamCollect(task: string | Array<JsContent>): Promise<any[]> {
     const tokens: any[] = [];
     await new Promise<void>((resolve) => {
       this.stream(task, token => {

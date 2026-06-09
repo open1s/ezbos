@@ -344,7 +344,7 @@ export class Agent {
     return [{ type: 'text', text: String(input) }];
   }
 
-  async run(task: string): Promise<string> {
+  async run(task: string | Array<JsContent>): Promise<string> {
     return this._inner.runSimple(this._resolveContent(task) as any);
   }
 

@@ -17,6 +17,8 @@ export interface JsContent {
 const DEFAULT_MODEL = 'nvidia/meta/llama-3.1-8b-instruct';
 const DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 
+export type McpStatusCallback = (namespace: string,type: 'process' | 'http',comm: string, status: 'connected' | 'failed', error?: string) => void;
+
 export class AgentBuilder {
   private _inner: jsbos.Agent | null = null;
   private _tools: InternalToolDef[] = [];
@@ -25,6 +27,7 @@ export class AgentBuilder {
   private _mcp: Array<{ type: 'process' | 'http', namespace: string, command?: string, args?: string[], url?: string }> = [];
   private _skillsDirs: string[] = [];
   private _inlineSkills: SkillDef[] = [];
+  private _onMcpStatus?: McpStatusCallback;
   private _config: {
     name: string;
     model: string;
@@ -54,6 +57,7 @@ export class AgentBuilder {
     rateLimitCapacity?: number;
     rateLimitWindowSecs?: number;
     rateLimitMaxRetries?: number;
+    onMcpStatus?: McpStatusCallback;
   } = {}) {
     this._config = {
       name,
@@ -70,6 +74,7 @@ export class AgentBuilder {
       rateLimitWindowSecs: options.rateLimitWindowSecs,
       rateLimitMaxRetries: options.rateLimitMaxRetries,
     };
+    this._onMcpStatus = options.onMcpStatus;
   }
 
   with_model(model: string): this {
@@ -233,10 +238,21 @@ export class AgentBuilder {
     }
 
     for (const mcp of this._mcp) {
-      if (mcp.type === 'process' && mcp.command && mcp.args) {
-        await this._inner.addMcpServer(mcp.namespace, mcp.command, mcp.args);
-      } else if (mcp.type === 'http' && mcp.url) {
-        await this._inner.addMcpServerHttp(mcp.namespace, mcp.url);
+      let added = false;
+      try {
+        if (mcp.type === 'process' && mcp.command && mcp.args) {
+          await this._inner.addMcpServer(mcp.namespace, mcp.command, mcp.args);
+          added = true;
+        } else if (mcp.type === 'http' && mcp.url) {
+          await this._inner.addMcpServerHttp(mcp.namespace, mcp.url);
+          added = true;
+        }
+        if (added) {
+          this._onMcpStatus?.(mcp.namespace, mcp.type, mcp.type === 'process' ? mcp.command! : mcp.url!, 'connected');
+        }
+      } catch (err) {
+        this._onMcpStatus?.(mcp.namespace, mcp.type, mcp.type === 'process' ? mcp.command! : mcp.url!, 'failed', String(err));
+        console.warn(`[agent] MCP server "${mcp.namespace}" connection failed, skipping:`, err);
       }
     }
 

@@ -22,7 +22,11 @@ async function main() {
   await brain.start();
 
   console.log('\n--- Agent with MCP process (filesystem server) ---');
-  const agent = brain.agent('mcp-demo')
+  const agent = brain.agent('mcp-demo', {
+    onMcpStatus: (namespace, type, command, status, error) => {
+      console.log(`[MCP Status] ${namespace}: ${type} ${command} - ${status}${error ? ` - ${error}` : ''}`);
+    },
+  })
     .with_mcp_process('files', 'npx', ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']);
 
   const started = await agent.start();
@@ -46,7 +50,11 @@ async function main() {
   }
 
   console.log('\n--- Agent with MCP HTTP server ---');
-  const httpAgent = brain.agent('mcp-http-demo')
+  const httpAgent = brain.agent('mcp-http-demo', {
+    onMcpStatus: (namespace, status, error) => {
+      console.log(`[MCP Status] ${namespace}: ${status}${error ? ` - ${error}` : ''}`);
+    },
+  })
     .with_mcp_http('hello-mcp', HTTP_MCP_URL);
 
   try {

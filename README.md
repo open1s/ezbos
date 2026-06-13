@@ -315,6 +315,38 @@ const mcpTools = await started.listMcpTools();
 console.log(`MCP tools available: ${mcpTools.length}`);
 ```
 
+### MCP Status Callback
+
+Get real-time notifications when each MCP server connects or fails. Useful for UI status updates.
+
+```ts
+const agent = brain.agent('my-agent', {
+  onMcpStatus: (namespace, status, error) => {
+    console.log(`[MCP] ${namespace}: ${status}`);
+    // Update UI status indicator
+  },
+})
+  .with_mcp_process('files', 'npx', ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])
+  .with_mcp_http('api', 'http://localhost:3000/mcp');
+
+const started = await agent.start();
+```
+
+Callback parameters:
+- `namespace` - MCP server name
+- `status` - `'connected'` | `'failed'`
+- `error` - error message string (only present when `status === 'failed'`)
+
+The build continues even if an MCP server fails — use the callback to track which ones succeeded or failed.
+
+Also works with `BrainOS.with()`:
+
+```ts
+const agent = await BrainOS.with('my-agent', {
+  onMcpStatus: (ns, s, e) => { /* ... */ },
+});
+```
+
 ## Skills
 
 Add domain-specific instructions to the system prompt.

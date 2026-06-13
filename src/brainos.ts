@@ -1,10 +1,11 @@
 import * as jsbos from '@open1s/jsbos';
-import { AgentBuilder, Agent } from './agent.js';
+import { AgentBuilder, Agent, McpStatusCallback } from './agent.js';
 
 interface BrainOSOptions {
   model?: string;
   baseUrl?: string;
   apiKey?: string;
+  onMcpStatus?: McpStatusCallback;
 }
 
 interface BusOptions {
@@ -73,16 +74,14 @@ export class BrainOS {
     temperature?: number;
     timeoutSecs?: number;
     maxTokens?: number;
+    onMcpStatus?: McpStatusCallback;
   } = {}): AgentBuilder {
     if (!this._started) {
       throw new Error('BrainOS not started. Call start() first.');
     }
     return new AgentBuilder(name, {
-      ...this._options,
       ...options,
-      apiKey: options.apiKey || this._options.apiKey,
-      model: options.model || this._options.model,
-      baseUrl: options.baseUrl || this._options.baseUrl,
+      ...this._options,
     });
   }
 

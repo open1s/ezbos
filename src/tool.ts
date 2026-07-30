@@ -30,6 +30,8 @@ export interface InternalToolDef {
   description: string;
   schema: Record<string, any>;
   callback: (args: Record<string, any>) => string | Promise<string>;
+  cancelable?: boolean;
+  cancelCallback?: (callId: string) => void;
 }
 
 export { jsbos };
@@ -37,9 +39,11 @@ export { jsbos };
 export class ToolBuilder {
   private _params: Record<string, ToolParam> = {};
   private _required: string[] = [];
-  
+  private _cancelable = false;
+  private _cancelCb?: (callId: string) => void;
+
   constructor(
-    private _name: string, 
+    private _name: string,
     private _description: string
   ) {}
 
@@ -51,6 +55,16 @@ export class ToolBuilder {
   required(name: string, type: ToolParam['type'], description?: string): this {
     this._params[name] = { type, description };
     this._required.push(name);
+    return this;
+  }
+
+  cancelable(): this {
+    this._cancelable = true;
+    return this;
+  }
+
+  onCancel(callback: (callId: string) => void): this {
+    this._cancelCb = callback;
     return this;
   }
 
@@ -89,6 +103,8 @@ export class ToolBuilder {
       name: this._name,
       description: this._description,
       schema,
+      cancelable: this._cancelable,
+      cancelCallback: this._cancelCb,
       callback: wrappedCallback
     };
   }

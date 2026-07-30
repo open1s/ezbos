@@ -185,6 +185,80 @@ const failure = err('Not found', { code: 404 });
 
 **Note:** Tool callbacks must be synchronous. The underlying jsbos native layer does not support async tool callbacks.
 
+### Cancellation
+
+Cancel a running tool invocation via the message bus. Mark a tool as cancelable and optionally provide a cancel handler:
+
+```ts
+import { defineTool, ok } from '@open1s/ezbos';
+
+const slowOp = defineTool('slowOp', 'A slow operation (~7s)')
+  .required('key', 'string', 'A key to process')
+  .cancelable()
+  .onCancel((callId) => {
+    console.log(`slowOp cancelled: ${callId}`);
+  })
+  .handle(async (args) => {
+    await new Promise((r) => setTimeout(r, 7000));
+    return ok({ key: args.key, result: 'done' });
+  });
+```
+
+To cancel a running tool, subscribe to lifecycle events and publish a cancel message:
+
+```ts
+const brain = new BrainOS();
+await brain.start();
+
+const agent = brain.agent('my-agent')
+  .with_tools(slowOp)
+  .with_systemPrompt('Use slowOp with key "demo"');
+
+const started = await agent.start();
+
+const agentName = 'my-agent';
+const eventsTopic = `agent/${agentName}/tool/events`;
+const cancelTopic = `agent/${agentName}/tool/cancel`;
+
+const sub = await brain.subscriber(eventsTopic);
+const activeCallIds = [];
+sub.runJson((data) => {
+  const { call_id, tool, status } = data;
+  if (status === 'started') activeCallIds.push(call_id);
+});
+
+const task = started.ask('Use slowOp with key "demo"');
+
+// Wait for the tool to start, then cancel
+for (let i = 0; i < 600; i++) {
+  await new Promise((r) => setTimeout(r, 100));
+  if (activeCallIds.length > 0) break;
+}
+if (activeCallIds[0]) {
+  await brain.publish(cancelTopic, { call_id: activeCallIds[0] }, true);
+}
+
+await task;
+await sub.stop();
+await started.close();
+await brain.stop();
+```
+
+**Lifecycle events** published by the engine on `agent/{name}/tool/events`:
+
+| Status | Description |
+|--------|-------------|
+| `started` | Tool invocation began |
+| `completed` | Tool completed successfully |
+| `cancelled` | Tool was cancelled |
+| `failed` | Tool invocation failed |
+
+```json
+{"call_id":"call-xxx","tool":"slowOp","status":"started","timestamp_ms":...}
+```
+
+**How it works:** The engine auto-subscribes to `agent/{name}/tool/cancel`. When a `{ "call_id": "..." }` message arrives, the engine cancels the running invocation and calls the `onCancel` handler you defined on the tool.
+
 ## Hooks
 
 Intercept agent lifecycle events.
@@ -553,6 +627,7 @@ await agent.close();
 | `08-brainos-messaging.ts` | Query/Queryable, Caller/Callable, Publisher/Subscriber (recv + run) |
 | `09-system-prompt.ts` | System prompt management and configuration |
 | `10-multimodal.ts` | Multimodal content (images, audio), Content/ContentPart API |
+| `11-cancel.ts` | Tool cancellation via message bus, lifecycle events, cancelable tool pattern |
 
 ```bash
 npm run example:tools
@@ -565,6 +640,7 @@ npm run example:agent
 npm run example:messaging
 npm run example:system-prompt
 npm run example:multimodal
+npm run example:cancel
 ```
 
 ## License

@@ -28,6 +28,7 @@ export class AgentBuilder {
   private _skillsDirs: string[] = [];
   private _inlineSkills: SkillDef[] = [];
   private _onMcpStatus?: McpStatusCallback;
+  private _session?: any;
   private _config: {
     name: string;
     model: string;
@@ -57,7 +58,8 @@ export class AgentBuilder {
     rateLimitCapacity?: number;
     rateLimitWindowSecs?: number;
     rateLimitMaxRetries?: number;
-    onMcpStatus?: McpStatusCallback;
+    onMcp?: (ns: string, t: string, c: string, s: string, e?: string) => void;
+    session?: any;
   } = {}) {
     this._config = {
       name,
@@ -74,7 +76,8 @@ export class AgentBuilder {
       rateLimitWindowSecs: options.rateLimitWindowSecs,
       rateLimitMaxRetries: options.rateLimitMaxRetries,
     };
-    this._onMcpStatus = options.onMcpStatus;
+    this._onMcpStatus = options.onMcp;
+    this._session = options.session;
   }
 
   with_model(model: string): this {
@@ -189,7 +192,11 @@ export class AgentBuilder {
   }
 
   async start(): Promise<Agent> {
-    this._inner = await jsbos.Agent.create(this._config as any);
+    if (this._session) {
+      this._inner = await jsbos.Agent.createWithBus(this._config as any, this._session);
+    } else {
+      this._inner = await jsbos.Agent.create(this._config as any);
+    }
 
     for (const tool of this._tools) {
       this._inner.addTool(
@@ -204,7 +211,11 @@ export class AgentBuilder {
           } catch (e: any) {
             return String(e);
           }
-        }
+        },
+        !!tool.cancelable,
+        tool.cancelCallback
+          ? (_err: any, callId: string) => tool.cancelCallback!(callId)
+          : undefined
       );
     }
 
@@ -300,7 +311,11 @@ export class AgentBuilder {
           } catch (e: any) {
             return String(e);
           }
-        }
+        },
+        !!tool.cancelable,
+        tool.cancelCallback
+          ? (_err: any, callId: string) => tool.cancelCallback!(callId)
+          : undefined
       );
     }
     return newAgent;
@@ -361,18 +376,22 @@ export class Agent {
   }
 
   async run(task: string | Array<JsContent>): Promise<string> {
+    if (typeof task === 'string') return this._inner.runSimple(task);
     return this._inner.runSimple(this._resolveContent(task) as any);
   }
 
   async ask(prompt: string | Array<JsContent>): Promise<string> {
+    if (typeof prompt === 'string') return this._inner.react(prompt);
     return this._inner.react(this._resolveContent(prompt) as any);
   }
 
   async runSimple(prompt: string | Array<JsContent>): Promise<string> {
+    if (typeof prompt === 'string') return this._inner.runSimple(prompt);
     return this._inner.runSimple(this._resolveContent(prompt) as any);
   }
 
   async react(task: string | Array<JsContent>): Promise<string> {
+    if (typeof task === 'string') return this._inner.react(task);
     return this._inner.react(this._resolveContent(task) as any);
   }
 

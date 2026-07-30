@@ -17,6 +17,7 @@ interface BusOptions {
 
 export class BrainOS {
   private _bus: jsbos.Bus | null = null;
+  private _session: any = null;
   private _started = false;
   private _config: any = null;
   private _options: BrainOSOptions & { bus?: BusOptions } = {};
@@ -45,6 +46,7 @@ export class BrainOS {
 
     const busConfig = this._options.bus || { mode: 'peer' };
     this._bus = await jsbos.Bus.create(busConfig as any);
+    this._session = await this._bus.session();
     this._started = true;
 
     return this;
@@ -82,6 +84,7 @@ export class BrainOS {
     return new AgentBuilder(name, {
       ...options,
       ...this._options,
+      session: this._session,
     });
   }
 

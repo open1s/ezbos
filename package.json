@@ -1,6 +1,6 @@
 {
   "name": "@open1s/ezbos",
-  "version": "1.3.11",
+  "version": "1.4.1",
   "description": "Simple BrainOS - Easy wrapper for @open1s/jsbos",
   "type": "module",
   "main": "./dist/index.js",
@@ -41,12 +41,12 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@open1s/jsbos": "^2.3.10"
+    "@open1s/jsbos": "^2.4.1"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@types/node": "^25.8.0",
-    "tsx": "4.22",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/node": "^26.1.2",
+    "tsx": "4.23.7",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
   },

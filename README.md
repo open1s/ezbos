@@ -39,7 +39,9 @@ Place a `brainos.json` in your project root:
   "global_model": {
     "model": "nvidia/meta/llama-3.1-8b-instruct",
     "base_url": "https://integrate.api.nvidia.com/v1",
-    "api_key": "your-key"
+    "api_key": "your-key",
+    "api_mode": "responses",
+    "reasoning_effort": "high"
   }
 }
 ```
@@ -51,6 +53,8 @@ const brain = new BrainOS({
   model: 'nvidia/meta/llama-3.1-8b-instruct',
   baseUrl: 'https://integrate.api.nvidia.com/v1',
   apiKey: 'nvapi-xxx',
+  apiMode: 'responses',
+  reasoningEffort: 'high',
 });
 await brain.start();
 ```
@@ -68,6 +72,8 @@ const agent = brain.agent('name')
   .with_temperature(0.7)
   .with_timeout(120)
   .with_maxTokens(4096)
+  .with_apiMode('responses') // 'chat' (default) or 'responses'
+  .with_reasoningEffort('high') // e.g. 'low' | 'medium' | 'high'
   .with_tools(tool1, tool2)
   .with_hooks(hook1, hook2)
   .with_plugins(plugin1)

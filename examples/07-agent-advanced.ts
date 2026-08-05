@@ -63,6 +63,33 @@ async function main() {
   console.log('\n--- Agent tools list ---');
   console.log('Tools:', started.tools);
 
+  console.log('\n--- apiMode: Responses API ---');
+  const responsesAgent = brain.agent('responses-demo')
+    .with_tools(addTool)
+    .with_apiMode('responses');
+  const responsesStarted = await responsesAgent.start();
+  console.log('Responses API agent config:', responsesStarted.config);
+
+  console.log('\n--- reasoningEffort: thinking effort control ---');
+  const reasoningAgent = brain.agent('reasoning-demo')
+    .with_tools(addTool)
+    .with_apiMode('chat')
+    .with_reasoningEffort('high');
+  const reasoningStarted = await reasoningAgent.start();
+  console.log('Reasoning agent config:', reasoningStarted.config);
+
+  console.log('\n--- apiMode + reasoningEffort via agent() options ---');
+  const optionsAgent = brain.agent('options-demo', {
+    apiMode: 'responses',
+    reasoningEffort: 'low',
+  });
+  const optionsStarted = await optionsAgent.start();
+  console.log('Options agent config:', optionsStarted.config);
+
+  await responsesStarted.close();
+  await reasoningStarted.close();
+  await optionsStarted.close();
+
   console.log('\n--- Resilience options ---');
   const resilientAgent = brain.agent('resilient')
     .with_tools(addTool)

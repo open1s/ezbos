@@ -5,6 +5,8 @@ interface BrainOSOptions {
   model?: string;
   baseUrl?: string;
   apiKey?: string;
+  apiMode?: string;
+  reasoningEffort?: string;
   onMcpStatus?: McpStatusCallback;
 }
 
@@ -39,10 +41,14 @@ export class BrainOS {
     const apiKey = this._options.apiKey || gm.api_key;
     const baseUrl = this._options.baseUrl || gm.base_url || 'https://integrate.api.nvidia.com/v1';
     const model = this._options.model || gm.model || 'nvidia/meta/llama-3.1-8b-instruct';
+    const apiMode = this._options.apiMode || gm.api_mode;
+    const reasoningEffort = this._options.reasoningEffort || gm.reasoning_effort;
 
     this._options.apiKey = apiKey;
     this._options.baseUrl = baseUrl;
     this._options.model = model;
+    this._options.apiMode = apiMode;
+    this._options.reasoningEffort = reasoningEffort;
 
     const busConfig = this._options.bus || { mode: 'peer' };
     this._bus = await jsbos.Bus.create(busConfig as any);
@@ -76,6 +82,8 @@ export class BrainOS {
     temperature?: number;
     timeoutSecs?: number;
     maxTokens?: number;
+    apiMode?: string;
+    reasoningEffort?: string;
     onMcpStatus?: McpStatusCallback;
   } = {}): AgentBuilder {
     if (!this._started) {

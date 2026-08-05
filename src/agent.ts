@@ -38,6 +38,8 @@ export class AgentBuilder {
     temperature: number;
     timeoutSecs: number;
     maxTokens?: number;
+    apiMode?: string;
+    reasoningEffort?: string;
     circuitBreakerMaxFailures?: number;
     circuitBreakerCooldownSecs?: number;
     rateLimitCapacity?: number;
@@ -53,6 +55,8 @@ export class AgentBuilder {
     temperature?: number;
     timeoutSecs?: number;
     maxTokens?: number;
+    apiMode?: string;
+    reasoningEffort?: string;
     circuitBreakerMaxFailures?: number;
     circuitBreakerCooldownSecs?: number;
     rateLimitCapacity?: number;
@@ -70,6 +74,8 @@ export class AgentBuilder {
       temperature: options.temperature ?? 0.7,
       timeoutSecs: options.timeoutSecs || 120,
       maxTokens: options.maxTokens ?? 4096,
+      apiMode: options.apiMode,
+      reasoningEffort: options.reasoningEffort,
       circuitBreakerMaxFailures: options.circuitBreakerMaxFailures,
       circuitBreakerCooldownSecs: options.circuitBreakerCooldownSecs,
       rateLimitCapacity: options.rateLimitCapacity,
@@ -116,6 +122,16 @@ export class AgentBuilder {
 
   with_maxTokens(tokens: number): this {
     this._config.maxTokens = tokens;
+    return this;
+  }
+
+  with_apiMode(mode: string): this {
+    this._config.apiMode = mode;
+    return this;
+  }
+
+  with_reasoningEffort(effort: string): this {
+    this._config.reasoningEffort = effort;
     return this;
   }
 
@@ -297,6 +313,8 @@ export class AgentBuilder {
       temperature: this._config.temperature,
       timeoutSecs: this._config.timeoutSecs,
       maxTokens: this._config.maxTokens,
+      apiMode: this._config.apiMode,
+      reasoningEffort: this._config.reasoningEffort,
     });
     for (const tool of this._tools) {
       newAgent.addTool(

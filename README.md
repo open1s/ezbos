@@ -11,22 +11,28 @@ npm install @open1s/ezbos
 ## Quick Start
 
 ```ts
-import { BrainOS, tool } from '@open1s/ezbos';
+import { BrainOS, defineTool } from '@open1s/ezbos';
+import { z } from 'zod';
 
 const brain = new BrainOS();
 await brain.start();
 
-const addTool = tool('Add', 'Add two numbers', (args) => String(args.a + args.b));
+const addTool = defineTool({
+  name: 'add',
+  description: 'Add two numbers',
+  parameters: z.object({ a: z.number(), b: z.number() }),
+  execute: ({ a, b }) => String(a + b),
+});
 
-const agent = brain.agent('assistant')
-  .with_tools(addTool)
-  .with_systemPrompt('You are a helpful assistant.');
+const agent = await brain
+  .agent('assistant')
+  .withTools(addTool)
+  .withSystemPrompt('You are a helpful assistant.')
+  .start();
 
-const started = await agent.start();
-const result = await started.ask('What is 5 + 3?');
-console.log(result);
+console.log(await agent.ask('What is 5 + 3?'));
 
-await started.close();
+await agent.close();
 await brain.stop();
 ```
 
@@ -150,6 +156,9 @@ await agent.stream(multiContent, (token) => {
 | `Content.audioUrl(url, format)` | Single audio (URL) |
 | `Content.parts([...])` | Multi-part content |
 
+Top-level shorthands (same functions): `text(...)`, `image(...)`, `parts(...)` —
+`import { text, image, parts } from '@open1s/ezbos'`.
+
 ### ContentPart API
 
 | Method | Description |
@@ -165,7 +174,7 @@ await agent.stream(multiContent, (token) => {
 Configure circuit breaker and rate limiting:
 
 ```ts
-agent.with_resilience({
+agent.withResilience({
   circuitBreakerMaxFailures: 3,    // trip after 3 failures
   circuitBreakerCooldownSecs: 10,  // wait 10s before retry
   rateLimitCapacity: 5,            // allow 5 requests
@@ -177,6 +186,31 @@ agent.with_resilience({
 ## Tools
 
 Define tools the LLM can call.
+
+### Typed Tool (zod)
+
+The preferred way to define tools — the zod schema gives the LLM a JSON
+Schema **and** validates arguments at runtime:
+
+```ts
+import { defineTool, ok } from '@open1s/ezbos';
+import { z } from 'zod';
+
+const getWeather = defineTool({
+  name: 'get_weather',
+  description: 'Get the weather for a city',
+  parameters: z.object({
+    city: z.string().describe('City name'),
+    unit: z.enum(['c', 'f']).optional(),
+  }),
+  execute: async ({ city, unit }) => ok({ city, unit, temp: 21 }),
+});
+```
+
+Invalid arguments are returned to the model as
+`Error: tool "get_weather" received invalid arguments: ...`; thrown errors
+as `Error: tool "get_weather" failed: ...`. The legacy builder form below
+still works.
 
 ### Simple Tool
 
@@ -214,7 +248,7 @@ const success = ok({ value: 42 }, { cached: true });
 const failure = err('Not found', { code: 404 });
 ```
 
-**Note:** Tool callbacks must be synchronous. The underlying jsbos native layer does not support async tool callbacks.
+**Note:** Tool callbacks may be `async` — promises are awaited before the result is returned to the model.
 
 ### Cancellation
 
@@ -242,8 +276,8 @@ const brain = new BrainOS();
 await brain.start();
 
 const agent = brain.agent('my-agent')
-  .with_tools(slowOp)
-  .with_systemPrompt('Use slowOp with key "demo"');
+  .withTools(slowOp)
+  .withSystemPrompt('Use slowOp with key "demo"');
 
 const started = await agent.start();
 
@@ -302,7 +336,7 @@ const logHook = defineHook(HookEvent.BeforeToolCall, (ctx) => {
   return 'continue';  // or 'abort'
 });
 
-agent.with_hooks(logHook);
+agent.withHooks(logHook);
 ```
 
 Available events:
@@ -323,7 +357,7 @@ Available events:
 import { mergeHooks } from '@open1s/ezbos';
 
 const allHooks = mergeHooks(beforeHook, afterHook, beforeLlmHook);
-agent.with_hooks(allHooks);
+agent.withHooks(allHooks);
 ```
 
 ## Plugins
@@ -343,7 +377,7 @@ const loggerPlugin = definePlugin({
   on_tool_result: (result) => { console.log('Tool result'); return result; },
 });
 
-agent.with_plugins(loggerPlugin);
+agent.withPlugins(loggerPlugin);
 ```
 
 ### Class-based Plugin
@@ -362,7 +396,7 @@ class MyPlugin {
 
 const plugin = new MyPlugin();
 const handlers = getPluginHandlers(plugin);
-agent.with_plugins(plugin);
+agent.withPlugins(plugin);
 ```
 
 ### Merge Plugins
@@ -371,7 +405,7 @@ agent.with_plugins(plugin);
 import { mergePlugins } from '@open1s/ezbos';
 
 const merged = mergePlugins(pluginA, pluginB);
-agent.with_plugins(merged);
+agent.withPlugins(merged);
 ```
 
 ## MCP
@@ -536,9 +570,17 @@ await started.stream('Task', (token) => {
   if (token.type === 'ReasoningContent') process.stdout.write(token.text);
 });
 
-// Collect all tokens
+// Collect all tokens (also terminates when the stream errors)
 const tokens = await started.streamCollect('Task');
 const text = tokens.filter(t => t.text).map(t => t.text).join('');
+
+// Async iteration (recommended): typed events, cancel via AbortSignal
+const controller = new AbortController();
+for await (const ev of started.streamEvents('Task', { signal: controller.signal })) {
+  if (ev.type === 'token' && ev.token.type === 'Text') process.stdout.write(ev.token.text);
+  if (ev.type === 'done') console.log('\nfinal:', ev.result);
+  if (ev.type === 'error') throw new Error(ev.error);
+}
 ```
 
 ### Session Management
@@ -576,6 +618,31 @@ started.resetMetrics();
 console.log(started.tools);    // ['Add', 'Greet']
 console.log(started.config);   // { model, baseUrl, temperature, ... }
 ```
+
+## Errors
+
+Every failure surfaced by the SDK is an `EzbosError` with a machine-readable
+`code`, so you can branch without string-matching messages:
+
+```ts
+import { EzbosError, CancelledError, ToolExecutionError } from '@open1s/ezbos';
+
+try {
+  await agent.ask(task);
+} catch (e) {
+  if (e instanceof EzbosError && e.code === 'CANCELLED') return;
+  throw e;
+}
+```
+
+| Class | `code` | Raised when |
+|-------|--------|-------------|
+| `ConfigurationError` | `CONFIGURATION` | invalid SDK options or unconvertible zod schema |
+| `InvalidArgumentsError` | `INVALID_ARGUMENTS` | tool arguments fail schema validation (also returned to the model) |
+| `ToolExecutionError` | `TOOL_EXECUTION` | tool callback threw or returned a failure result |
+| `StreamError` | `STREAM_ERROR` | stream/network failure |
+| `CancelledError` | `CANCELLED` | run aborted via `AbortSignal` or `stop()` |
+| `TimeoutError` | `TIMEOUT` | configured timeout exceeded |
 
 ## Messaging
 

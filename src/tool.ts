@@ -1,4 +1,6 @@
 import * as jsbos from '@open1s/jsbos';
+import { z } from 'zod';
+import { ConfigurationError, InvalidArgumentsError, ToolExecutionError } from './errors';
 
 export interface ToolResult {
   success: boolean;
@@ -110,8 +112,100 @@ export class ToolBuilder {
   }
 }
 
-export function defineTool(name: string, description: string): ToolBuilder {
-  return new ToolBuilder(name, description);
+export interface TypedToolDef<T = any> {
+  name: string;
+  description: string;
+  /** zod schema describing the tool arguments; converted to JSON Schema for the LLM and enforced at runtime. */
+  parameters: z.ZodType<T>;
+  execute: (args: T) => any | Promise<any>;
+  cancelable?: boolean;
+  onCancel?: (callId: string) => void;
+}
+
+function serializeToolResult(result: any): string {
+  if (result === undefined) return '';
+  if (typeof result === 'string') return result;
+  return JSON.stringify(result);
+}
+
+/**
+ * Define a tool.
+ *
+ * Preferred form — a single definition object with a zod schema:
+ * ```ts
+ * const weather = defineTool({
+ *   name: 'get_weather',
+ *   description: 'Get the weather for a city',
+ *   parameters: z.object({ city: z.string() }),
+ *   execute: async ({ city }) => ok({ temp: 21 }),
+ * });
+ * ```
+ * Arguments are validated at runtime; failures come back to the model as
+ * `Error: tool "get_weather" received invalid arguments: ...`.
+ *
+ * Legacy builder form (still supported):
+ * `defineTool('name', 'description').param(...).handle(fn)`
+ */
+export function defineTool(name: string, description: string): ToolBuilder;
+export function defineTool<T>(definition: TypedToolDef<T>): InternalToolDef;
+export function defineTool<T>(
+  nameOrDefinition: string | TypedToolDef<T>,
+  description?: string
+): ToolBuilder | InternalToolDef {
+  if (typeof nameOrDefinition === 'string') {
+    return new ToolBuilder(nameOrDefinition, description ?? '');
+  }
+
+  const def = nameOrDefinition;
+  if (!def.name || !def.description || typeof def.parameters !== 'object') {
+    throw new ConfigurationError(
+      'defineTool({ ... }) requires name, description and a zod parameters schema'
+    );
+  }
+
+  let jsonSchema: Record<string, any>;
+  try {
+    jsonSchema = z.toJSONSchema(def.parameters as z.ZodType, { io: 'input' }) as Record<string, any>;
+    delete jsonSchema.$schema;
+  } catch (cause) {
+    throw new ConfigurationError(
+      `tool "${def.name}": zod schema cannot be converted to JSON Schema`,
+      { cause }
+    );
+  }
+
+  const callback = async (rawArgs: any): Promise<string> => {
+    let args: any;
+    try {
+      args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
+    } catch (cause) {
+      return 'Error: ' + new InvalidArgumentsError(def.name, 'arguments were not valid JSON').message;
+    }
+
+    const parsed = def.parameters.safeParse(args);
+    if (!parsed.success) {
+      return 'Error: ' + new InvalidArgumentsError(def.name, parsed.error.issues).message;
+    }
+
+    try {
+      const result = await def.execute(parsed.data);
+      if (isErrorResult(result)) {
+        return 'Error: ' + new ToolExecutionError(def.name, result.error || 'Unknown error').message;
+      }
+      return serializeToolResult(result);
+    } catch (e: any) {
+      return 'Error: ' + new ToolExecutionError(def.name, e?.message || String(e), { cause: e }).message;
+    }
+  };
+
+  return {
+    name: def.name,
+    description: def.description,
+    schema: jsonSchema,
+    callback,
+    cancelable: def.cancelable,
+    cancelCallback: def.onCancel
+  };
 }
 
 export function tool(name: string, description: string, callback: (args: any) => any): InternalToolDef {

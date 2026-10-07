@@ -2,6 +2,7 @@ import * as jsbos from '@open1s/jsbos';
 
 export { jsbos };
 
+export * from './errors.js';
 export * from './tool.js';
 export * from './hook.js';
 export * from './plugin.js';

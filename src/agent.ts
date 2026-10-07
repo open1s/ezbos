@@ -4,6 +4,7 @@ import { HookEvent, HookCallback, mergeHooks } from './hook.js';
 import { PluginHandlers, mergePlugins } from './plugin.js';
 import { SkillDef } from './skills.js';
 import { Content } from './content.js';
+import { CancelledError } from './errors.js';
 
 export interface JsContent {
   type: string;
@@ -14,10 +15,42 @@ export interface JsContent {
   name?: string;
 }
 
+/**
+ * A single event from {@link Agent.streamEvents}.
+ *
+ * - `token` — an incremental token/chunk from the model.
+ * - `done`  — terminal; `result` is the final accumulated text.
+ * - `error` — terminal; the stream failed. Exactly one terminal event is
+ *   emitted per iteration.
+ */
+export type StreamEvent =
+  | { type: 'token'; token: any }
+  | { type: 'done'; result: string }
+  | { type: 'error'; error: string };
+
 export const DEFAULT_MODEL = 'nvidia/meta/llama-3.1-8b-instruct';
 export const DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 
 export type McpStatusCallback = (namespace: string,type: 'process' | 'http',comm: string, status: 'connected' | 'failed', error?: string) => void;
+
+/** Native agent construction options (mirrors jsbos AgentConfig). */
+export interface AgentCreateConfig {
+  name: string;
+  model: string;
+  baseUrl: string;
+  apiKey?: string;
+  systemPrompt: string;
+  temperature: number;
+  timeoutSecs: number;
+  maxTokens?: number;
+  apiMode?: string;
+  reasoningEffort?: string;
+  circuitBreakerMaxFailures?: number;
+  circuitBreakerCooldownSecs?: number;
+  rateLimitCapacity?: number;
+  rateLimitWindowSecs?: number;
+  rateLimitMaxRetries?: number;
+}
 
 export class AgentBuilder {
   private _inner: jsbos.Agent | null = null;
@@ -29,23 +62,7 @@ export class AgentBuilder {
   private _inlineSkills: SkillDef[] = [];
   private _onMcpStatus?: McpStatusCallback;
   private _session?: any;
-  private _config: {
-    name: string;
-    model: string;
-    baseUrl: string;
-    apiKey?: string;
-    systemPrompt: string;
-    temperature: number;
-    timeoutSecs: number;
-    maxTokens?: number;
-    apiMode?: string;
-    reasoningEffort?: string;
-    circuitBreakerMaxFailures?: number;
-    circuitBreakerCooldownSecs?: number;
-    rateLimitCapacity?: number;
-    rateLimitWindowSecs?: number;
-    rateLimitMaxRetries?: number;
-  };
+  private _config: AgentCreateConfig;
 
   constructor(name: string, options: {
     model?: string;
@@ -87,55 +104,79 @@ export class AgentBuilder {
     this._session = options.session;
   }
 
+  /**
+   * Create the underlying native agent. `start()` calls this exactly once —
+   * the final system prompt (base + inline skills) is already composed in
+   * `config`. Overriding this is the supported test seam for injecting a
+   * fake inner agent.
+   */
+  protected async createInner(config: AgentCreateConfig): Promise<jsbos.Agent> {
+    if (this._session) {
+      return jsbos.Agent.createWithBus(config as any, this._session);
+    }
+    return jsbos.Agent.create(config as any);
+  }
+
+  /** @deprecated Use {@link withModel}. */
   with_model(model: string): this {
     this._config.model = model;
     return this;
   }
 
+  /** @deprecated Use {@link withBaseUrl}. */
   with_baseUrl(url: string): this {
     this._config.baseUrl = url;
     return this;
   }
 
+  /** @deprecated Use {@link withApiKey}. */
   with_apiKey(key: string): this {
     this._config.apiKey = key;
     return this;
   }
 
+  /** @deprecated Use {@link withSystemPrompt}. */
   with_systemPrompt(prompt: string): this {
     this._config.systemPrompt = prompt;
     return this;
   }
 
+  /** @deprecated Use {@link withPrompt}. */
   with_prompt(prompt: string): this {
     return this.with_systemPrompt(prompt);
   }
 
+  /** @deprecated Use {@link withTemperature}. */
   with_temperature(temp: number): this {
     this._config.temperature = temp;
     return this;
   }
 
+  /** @deprecated Use {@link withTimeout}. */
   with_timeout(secs: number): this {
     this._config.timeoutSecs = secs;
     return this;
   }
 
+  /** @deprecated Use {@link withMaxTokens}. */
   with_maxTokens(tokens: number): this {
     this._config.maxTokens = tokens;
     return this;
   }
 
+  /** @deprecated Use {@link withApiMode}. */
   with_apiMode(mode: string): this {
     this._config.apiMode = mode;
     return this;
   }
 
+  /** @deprecated Use {@link withReasoningEffort}. */
   with_reasoningEffort(effort: string): this {
     this._config.reasoningEffort = effort;
     return this;
   }
 
+  /** @deprecated Use {@link withTools}. */
   with_tools(...tools: any[]): this {
     for (const t of tools) {
       if (t && typeof t === 'object' && 'name' in t && 'description' in t && 'callback' in t) {
@@ -180,38 +221,45 @@ export class AgentBuilder {
     rateLimitMaxRetries?: number;
   }): this { return this.with_resilience(opts); }
 
+  /** @deprecated Use {@link withHooks}. */
   with_hooks(...sources: any[]): this {
     const merged = mergeHooks(...sources);
     this._hooks.push(...merged);
     return this;
   }
 
+  /** @deprecated Use {@link withPlugins}. */
   with_plugins(...sources: any[]): this {
     const merged = mergePlugins(...sources);
     this._plugins.push(...merged);
     return this;
   }
 
+  /** @deprecated Use {@link withMcpProcess}. */
   with_mcp_process(namespace: string, command: string, args: string[]): this {
     this._mcp.push({ type: 'process', namespace, command, args });
     return this;
   }
 
+  /** @deprecated Use {@link withMcpHttp}. */
   with_mcp_http(namespace: string, url: string): this {
     this._mcp.push({ type: 'http', namespace, url });
     return this;
   }
 
+  /** @deprecated Use {@link withSkillsDir}. */
   with_skills_dir(dirPath: string): this {
     this._skillsDirs.push(dirPath);
     return this;
   }
 
+  /** @deprecated Use {@link withSkills}. */
   with_skills(...skills: SkillDef[]): this {
     this._inlineSkills.push(...skills);
     return this;
   }
 
+  /** @deprecated Use {@link withResilience}. */
   with_resilience(opts: {
     circuitBreakerMaxFailures?: number;
     circuitBreakerCooldownSecs?: number;
@@ -238,11 +286,17 @@ export class AgentBuilder {
   }
 
   async start(): Promise<Agent> {
-    if (this._session) {
-      this._inner = await jsbos.Agent.createWithBus(this._config as any, this._session);
-    } else {
-      this._inner = await jsbos.Agent.create(this._config as any);
+    // Compose the final system prompt BEFORE creating the agent: inline skills
+    // must be baked into the one and only agent instance, so the hooks,
+    // plugins, MCP servers and skill dirs registered below can never be lost
+    // to a prompt rebuild (the old rebuild path re-added tools only).
+    let systemPrompt = this._config.systemPrompt || '';
+    for (const skill of this._inlineSkills) {
+      systemPrompt += `\n\n# Skill: ${skill.name}\n${skill.content}`;
     }
+    this._config.systemPrompt = systemPrompt;
+
+    this._inner = await this.createInner(this._config);
 
     for (const tool of this._tools) {
       this._inner.addTool(
@@ -313,60 +367,11 @@ export class AgentBuilder {
       }
     }
 
-    let systemPrompt = this._config.systemPrompt || '';
-
     for (const dir of this._skillsDirs) {
       await this._inner.registerSkillsFromDir(dir);
     }
 
-    for (const skill of this._inlineSkills) {
-      const addition = `\n\n# Skill: ${skill.name}\n${skill.content}`;
-      systemPrompt += addition;
-    }
-
-    if (systemPrompt !== this._config.systemPrompt) {
-      this._config.systemPrompt = systemPrompt;
-      const newAgent = await this.rebuildAgentWithPrompt(systemPrompt);
-      this._inner = newAgent;
-    }
-
     return new Agent(this._inner!);
-  }
-
-  private async rebuildAgentWithPrompt(newPrompt: string): Promise<jsbos.Agent> {
-    const newAgent = await jsbos.Agent.create({
-      name: this._config.name,
-      model: this._config.model,
-      baseUrl: this._config.baseUrl,
-      apiKey: this._config.apiKey || '',
-      systemPrompt: newPrompt,
-      temperature: this._config.temperature,
-      timeoutSecs: this._config.timeoutSecs,
-      maxTokens: this._config.maxTokens,
-      apiMode: this._config.apiMode,
-      reasoningEffort: this._config.reasoningEffort,
-    });
-    for (const tool of this._tools) {
-      newAgent.addTool(
-        tool.name,
-        tool.description,
-        JSON.stringify(tool.schema.properties || {}),
-        JSON.stringify(tool.schema),
-        (err: any, args: any) => {
-          if (err) return String(err);
-          try {
-            return tool.callback(args);
-          } catch (e: any) {
-            return String(e);
-          }
-        },
-        !!tool.cancelable,
-        tool.cancelCallback
-          ? (_err: any, callId: string) => tool.cancelCallback!(callId)
-          : undefined
-      );
-    }
-    return newAgent;
   }
 
   async ask(prompt: string | Array<JsContent>): Promise<string> {
@@ -423,11 +428,19 @@ export class Agent {
     return [{ type: 'text', text: String(input) }];
   }
 
+  /**
+   * Single-shot completion — NO tool loop (jsbos `runSimple`).
+   * Use {@link ask} when the model should call registered tools.
+   */
   async run(task: string | Array<JsContent>): Promise<string> {
     if (typeof task === 'string') return this._inner.runSimple(task);
     return this._inner.runSimple(this._resolveContent(task) as any);
   }
 
+  /**
+   * ReAct loop WITH the registered tools — the main entry point (jsbos
+   * `react`): the model may reason, call tools and iterate until done.
+   */
   async ask(prompt: string | Array<JsContent>): Promise<string> {
     if (typeof prompt === 'string') return this._inner.react(prompt);
     return this._inner.react(this._resolveContent(prompt) as any);
@@ -489,15 +502,85 @@ export class Agent {
     });
   }
 
+  /**
+   * Stream the task as an async iterable — the modern, backpressure-friendly
+   * alternative to callback streaming:
+   * ```ts
+   * for await (const ev of agent.streamEvents('Write a haiku')) {
+   *   if (ev.type === 'token') process.stdout.write(ev.token.text ?? '');
+   *   if (ev.type === 'error') throw new Error(ev.error);
+   * }
+   * ```
+   *
+   * The iterator always terminates with exactly one `done` or `error` event.
+   * Pass `signal` to cancel mid-stream (calls `stop()` and ends iteration).
+   */
+  async *streamEvents(
+    task: string | Array<JsContent>,
+    opts?: { signal?: AbortSignal }
+  ): AsyncGenerator<StreamEvent, void, void> {
+    const queue: StreamEvent[] = [];
+    let notify: (() => void) | null = null;
+    let finished = false;
+    let sawError = false;
+    const wake = () => { const n = notify; notify = null; n?.(); };
+    const push = (ev: StreamEvent) => { queue.push(ev); wake(); };
+
+    if (opts?.signal?.aborted) throw new CancelledError('stream aborted before it started');
+    const onAbort = () => { try { this._inner.stop(); } catch { /* already stopped */ } };
+    opts?.signal?.addEventListener('abort', onAbort, { once: true });
+
+    const settled = this._inner
+      .stream(this._resolveContent(task) as any, (err, token) => {
+        if (err) {
+          sawError = true;
+          push({ type: 'error', error: err.message });
+        } else if (token && token.type !== 'Done') {
+          push({ type: 'token', token });
+        }
+      })
+      .then(
+        (result) => ({ ok: true, result } as const),
+        (e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) } as const)
+      )
+      .finally(() => { finished = true; wake(); });
+
+    try {
+      for (;;) {
+        while (queue.length > 0) {
+          const ev = queue.shift()!;
+          yield ev;
+          if (ev.type === 'error') return; // terminal: exactly one of done|error
+        }
+        if (finished) break;
+        await new Promise<void>((r) => { notify = r; });
+      }
+      // Drain anything the callback pushed during the final wake, then emit
+      // exactly one terminal event.
+      while (queue.length > 0) {
+        const ev = queue.shift()!;
+        yield ev;
+        if (ev.type === 'error') return;
+      }
+      const terminal = await settled;
+      if (terminal.ok) {
+        yield { type: 'done', result: terminal.result };
+      } else if (!sawError) {
+        yield { type: 'error', error: terminal.error };
+      }
+    } finally {
+      opts?.signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
+  /**
+   * Collect every stream token into an array. Terminates on stream
+   * completion OR error (the underlying promise always settles).
+   */
   async streamCollect(task: string | Array<JsContent>): Promise<any[]> {
     const tokens: any[] = [];
-    await new Promise<void>((resolve) => {
-      this.stream(task, token => {
-        tokens.push(token);
-        if (token.type === 'Done') {
-          resolve();
-        }
-      });
+    await this.stream(task, (token) => {
+      tokens.push(token);
     });
     return tokens;
   }

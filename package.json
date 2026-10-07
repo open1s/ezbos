@@ -44,7 +44,7 @@
     "@open1s/jsbos": "^3.0.2"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@types/node": "^26.6.4",
     "tsx": "4.23.15",
     "typescript": "^6.0.3",

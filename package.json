@@ -18,9 +18,10 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "node --import tsx --test",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/__tests__/*.test.ts",
     "example:tools": "tsx examples/01-tools.ts",
     "example:hooks": "tsx examples/02-hooks.ts",
     "example:plugins": "tsx examples/03-plugins.ts",
@@ -45,14 +46,14 @@
     "url": "https://github.com/open1s/ezbos"
   },
   "dependencies": {
-    "@open1s/jsbos": "^3.0.2"
+    "@open1s/jsbos": "^3.0.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@types/node": "^26.6.4",
     "tsx": "4.23.15",
-    "typescript": "^6.0.3",
-    "zod": "^4.6.5"
+    "typescript": "^6.0.3"
   },
   "packageManager": "yarn@4.13.0+sha512.5c20ba010c99815433e5c8453112165e673f1c7948d8d2b267f4b5e52097538658388ebc9f9580656d9b75c5cc996f990f611f99304a2197d4c56d21eea370e7"
 }

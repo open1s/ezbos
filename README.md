@@ -32,21 +32,35 @@ await brain.stop();
 
 ## Configuration
 
-Place a `brainos.json` in your project root:
+BrainOS loads bos TOML configuration from the standard locations on `start()`.
+Sources merge in order — later files override earlier ones:
 
-```json
-{
-  "global_model": {
-    "model": "nvidia/meta/llama-3.1-8b-instruct",
-    "base_url": "https://integrate.api.nvidia.com/v1",
-    "api_key": "your-key",
-    "api_mode": "responses",
-    "reasoning_effort": "high"
-  }
-}
+1. `/etc/bos/conf`
+2. `~/.bos/conf`
+3. `~/.config/bos/conf`
+4. `./bos/conf` (current working directory — wins)
+
+Example `bos/conf/config.toml`:
+
+```toml
+[global_model]
+model = "nvidia/meta/llama-3.1-8b-instruct"
+base_url = "https://integrate.api.nvidia.com/v1"
+api_key = "your-key"
+api_mode = "chat"          # or "responses"
+reasoning_effort = "high"
 ```
 
-BrainOS auto-discovers this config on `start()`. You can also pass options directly:
+This repository ships its own [`bos/conf/config.toml`](bos/conf/config.toml)
+so the bundled examples run against a local Ollama server out of the box.
+
+Option precedence for every agent:
+
+```
+per-agent options > BrainOS-level options > config file > built-in defaults
+```
+
+You can also pass options directly:
 
 ```ts
 const brain = new BrainOS({
@@ -61,27 +75,29 @@ await brain.start();
 
 ## Agent Builder
 
-Fluent builder for creating agents:
+Fluent builder for creating agents. camelCase names (`withModel`) are
+preferred; the original `with_snake_case` names (`with_model`) keep working
+for backwards compatibility.
 
 ```ts
 const agent = brain.agent('name')
-  .with_systemPrompt('You are helpful.')
-  .with_model('nvidia/meta/llama-3.1-8b-instruct')
-  .with_baseUrl('https://integrate.api.nvidia.com/v1')
-  .with_apiKey('your-key')
-  .with_temperature(0.7)
-  .with_timeout(120)
-  .with_maxTokens(4096)
-  .with_apiMode('responses') // 'chat' (default) or 'responses'
-  .with_reasoningEffort('high') // e.g. 'low' | 'medium' | 'high'
-  .with_tools(tool1, tool2)
-  .with_hooks(hook1, hook2)
-  .with_plugins(plugin1)
-  .with_mcp_process('fs', 'npx', ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])
-  .with_mcp_http('math', 'http://127.0.0.1:8000/mcp')
-  .with_skills_dir('./skills')
-  .with_skills({ name: 'Code Review', content: '...' })
-  .with_resilience({ circuitBreakerMaxFailures: 3, rateLimitCapacity: 5 });
+  .withSystemPrompt('You are helpful.')
+  .withModel('nvidia/meta/llama-3.1-8b-instruct')
+  .withBaseUrl('https://integrate.api.nvidia.com/v1')
+  .withApiKey('your-key')
+  .withTemperature(0.7)
+  .withTimeout(120)
+  .withMaxTokens(4096)
+  .withApiMode('responses') // 'chat' (default) or 'responses'
+  .withReasoningEffort('high') // e.g. 'low' | 'medium' | 'high'
+  .withTools(tool1, tool2)
+  .withHooks(hook1, hook2)
+  .withPlugins(plugin1)
+  .withMcpProcess('fs', 'npx', ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'])
+  .withMcpHttp('math', 'http://127.0.0.1:8000/mcp')
+  .withSkillsDir('./skills')
+  .withSkills({ name: 'Code Review', content: '...' })
+  .withResilience({ circuitBreakerMaxFailures: 3, rateLimitCapacity: 5 });
 
 const started = await agent.start();
 ```
@@ -106,6 +122,15 @@ const audioContent = Content.audio(base64Data, 'mp3');
 const multiContent = Content.parts([
   ContentPart.text('Describe this image'),
   ContentPart.image('https://example.com/photo.jpg'),
+]);
+
+// Local backends (e.g. Ollama) reject remote image URLs — download once
+// and send the image as a base64 data URL that every backend accepts:
+import { fetchImageAsDataUrl } from '@open1s/ezbos';
+const localImage = await fetchImageAsDataUrl('https://example.com/photo.jpg');
+const localContent = Content.parts([
+  ContentPart.text('Describe this image'),
+  ContentPart.image(localImage),
 ]);
 
 // Pass to any LLM method

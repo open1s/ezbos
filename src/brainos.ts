@@ -1,5 +1,5 @@
 import * as jsbos from '@open1s/jsbos';
-import { AgentBuilder, Agent, McpStatusCallback } from './agent.js';
+import { AgentBuilder, Agent, McpStatusCallback, DEFAULT_MODEL, DEFAULT_BASE_URL } from './agent.js';
 
 interface BrainOSOptions {
   model?: string;
@@ -33,14 +33,15 @@ export class BrainOS {
     loader.discover();
     try {
       this._config = JSON.parse(loader.loadSync());
-    } catch {
+    } catch (e) {
+      console.warn(`[ezbos] failed to load bos config, continuing without it: ${e}`);
       this._config = {};
     }
 
     const gm = this._config.global_model || {};
     const apiKey = this._options.apiKey || gm.api_key;
-    const baseUrl = this._options.baseUrl || gm.base_url || 'https://integrate.api.nvidia.com/v1';
-    const model = this._options.model || gm.model || 'nvidia/meta/llama-3.1-8b-instruct';
+    const baseUrl = this._options.baseUrl || gm.base_url || DEFAULT_BASE_URL;
+    const model = this._options.model || gm.model || DEFAULT_MODEL;
     const apiMode = this._options.apiMode || gm.api_mode;
     const reasoningEffort = this._options.reasoningEffort || gm.reasoning_effort;
 
@@ -89,9 +90,13 @@ export class BrainOS {
     if (!this._started) {
       throw new Error('BrainOS not started. Call start() first.');
     }
+    // Precedence: per-agent options > BrainOS-level options > config > defaults.
+    // The bus config belongs to BrainOS only and never reaches the builder.
+    const { bus: _bus, onMcpStatus: brainOnMcpStatus, ...defaults } = this._options;
     return new AgentBuilder(name, {
+      ...defaults,
       ...options,
-      ...this._options,
+      onMcp: options.onMcpStatus ?? brainOnMcpStatus,
       session: this._session,
     });
   }

@@ -14,8 +14,8 @@ export interface JsContent {
   name?: string;
 }
 
-const DEFAULT_MODEL = 'nvidia/meta/llama-3.1-8b-instruct';
-const DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
+export const DEFAULT_MODEL = 'nvidia/meta/llama-3.1-8b-instruct';
+export const DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 
 export type McpStatusCallback = (namespace: string,type: 'process' | 'http',comm: string, status: 'connected' | 'failed', error?: string) => void;
 
@@ -62,7 +62,8 @@ export class AgentBuilder {
     rateLimitCapacity?: number;
     rateLimitWindowSecs?: number;
     rateLimitMaxRetries?: number;
-    onMcp?: (ns: string, t: string, c: string, s: string, e?: string) => void;
+    onMcp?: McpStatusCallback;
+    onMcpStatus?: McpStatusCallback;
     session?: any;
   } = {}) {
     this._config = {
@@ -82,7 +83,7 @@ export class AgentBuilder {
       rateLimitWindowSecs: options.rateLimitWindowSecs,
       rateLimitMaxRetries: options.rateLimitMaxRetries,
     };
-    this._onMcpStatus = options.onMcp;
+    this._onMcpStatus = options.onMcp ?? options.onMcpStatus;
     this._session = options.session;
   }
 
@@ -149,6 +150,35 @@ export class AgentBuilder {
   register(...tools: any[]): this {
     return this.with_tools(...tools);
   }
+
+  // camelCase aliases (preferred). The with_snake_case names stay available
+  // for backwards compatibility.
+  withModel(model: string): this { return this.with_model(model); }
+  withBaseUrl(url: string): this { return this.with_baseUrl(url); }
+  withApiKey(key: string): this { return this.with_apiKey(key); }
+  withSystemPrompt(prompt: string): this { return this.with_systemPrompt(prompt); }
+  withPrompt(prompt: string): this { return this.with_prompt(prompt); }
+  withTemperature(temp: number): this { return this.with_temperature(temp); }
+  withTimeout(secs: number): this { return this.with_timeout(secs); }
+  withMaxTokens(tokens: number): this { return this.with_maxTokens(tokens); }
+  withApiMode(mode: string): this { return this.with_apiMode(mode); }
+  withReasoningEffort(effort: string): this { return this.with_reasoningEffort(effort); }
+  withTools(...tools: any[]): this { return this.with_tools(...tools); }
+  withHooks(...sources: any[]): this { return this.with_hooks(...sources); }
+  withPlugins(...sources: any[]): this { return this.with_plugins(...sources); }
+  withMcpProcess(namespace: string, command: string, args: string[]): this {
+    return this.with_mcp_process(namespace, command, args);
+  }
+  withMcpHttp(namespace: string, url: string): this { return this.with_mcp_http(namespace, url); }
+  withSkillsDir(dirPath: string): this { return this.with_skills_dir(dirPath); }
+  withSkills(...skills: SkillDef[]): this { return this.with_skills(...skills); }
+  withResilience(opts: {
+    circuitBreakerMaxFailures?: number;
+    circuitBreakerCooldownSecs?: number;
+    rateLimitCapacity?: number;
+    rateLimitWindowSecs?: number;
+    rateLimitMaxRetries?: number;
+  }): this { return this.with_resilience(opts); }
 
   with_hooks(...sources: any[]): this {
     const merged = mergeHooks(...sources);

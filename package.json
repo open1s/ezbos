@@ -40,6 +40,10 @@
     "ezbos"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/open1s/ezbos"
+  },
   "dependencies": {
     "@open1s/jsbos": "^3.0.2"
   },

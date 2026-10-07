@@ -1,27 +1,32 @@
-import { BrainOS, Content, ContentPart, version } from '../src/index.js';
+import { BrainOS, Content, ContentPart, fetchImageAsDataUrl, version } from '../src/index.js';
 import { ConfigLoader } from '@open1s/jsbos';
 
 const CAT_IMAGE = 'https://download.catpng.net/silver_tabby_cat_on_gray_pillow_beside_clear_glass_window-thumbnail.png';
 
-function loadGoogleConfig() {
+function loadModelConfig() {
   const loader = new ConfigLoader();
   loader.discover();
   const config = JSON.parse(loader.loadSync());
   const googleModel = config?.llm?.google || {};
+  const gm = config?.global_model || {};
   return {
-    model: googleModel.model || 'nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
-    baseUrl: googleModel.base_url || 'http://127.0.0.1:11436/v1',
-    apiKey: googleModel.api_key || '',
+    model: googleModel.model || gm.model || 'nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+    baseUrl: googleModel.base_url || gm.base_url || 'http://127.0.0.1:11436/v1',
+    apiKey: googleModel.api_key || gm.api_key || '',
   };
 }
 
 async function main() {
   console.log(`\n=== 10-multimodal.ts - Multimodal Content Demo (v${version()}) ===\n`);
 
-  const googleConfig = loadGoogleConfig();
+  const googleConfig = loadModelConfig();
   console.log(`Using model: ${googleConfig.model}`);
   const brain = new BrainOS({ model: googleConfig.model, baseUrl: googleConfig.baseUrl, apiKey: googleConfig.apiKey });
   await brain.start();
+
+  // Resolve once: local backends (Ollama) reject remote http(s) image URLs.
+  const catImage = await fetchImageAsDataUrl(CAT_IMAGE);
+  console.log(`Resolved cat image to data URL (${Math.round(catImage.length / 1024)} KiB)`);
 
   console.log('--- Text-only content (backward compatible) ---');
   const textAgent = await brain.agent('text-demo').start();
@@ -40,7 +45,7 @@ async function main() {
   const imageAgent = await brain.agent('image-demo').start();
   const imageContent = Content.parts([
     ContentPart.text('What do you see in this image?'),
-    ContentPart.image(CAT_IMAGE),
+    ContentPart.image(catImage),
   ]);
   console.log('Sending image content...');
   const imageResult = await imageAgent.ask(imageContent);
@@ -49,7 +54,7 @@ async function main() {
 
   console.log('\n--- Content.image() shorthand ---');
   const shorthandAgent = await brain.agent('shorthand-demo').start();
-  const shorthandContent = Content.image(CAT_IMAGE);
+  const shorthandContent = Content.image(catImage);
   const shorthandResult = await shorthandAgent.ask(shorthandContent);
   console.log('Shorthand result:', shorthandResult.slice(0, 200) + (shorthandResult.length > 200 ? '...' : ''));
   await shorthandAgent.close();
@@ -59,7 +64,7 @@ async function main() {
   console.log('Streaming image result:');
   const streamContent = Content.parts([
     ContentPart.text('Describe this image briefly.'),
-    ContentPart.image(CAT_IMAGE),
+    ContentPart.image(catImage),
   ]);
   await streamAgent.stream(streamContent, (token: any) => {
     if (token.type === 'Text') process.stdout.write(token.text);
@@ -70,7 +75,7 @@ async function main() {
 
   console.log('\n--- streamCollect() with multimodal content ---');
   const collectAgent = await brain.agent('collect-demo').start();
-  const collectContent = Content.image(CAT_IMAGE);
+  const collectContent = Content.image(catImage);
   const tokens = await collectAgent.streamCollect(collectContent);
   const textTokens = tokens.filter((t: any) => t.text);
   console.log('Collected', tokens.length, 'tokens,', textTokens.length, 'with text');

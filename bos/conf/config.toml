@@ -1,0 +1,29 @@
+# ezbos demo configuration (project-local, overrides ~/.bos/conf/config.toml)
+# bos discovers ./bos/conf from the current working directory and applies it
+# last (merge strategy: override), so these demo defaults win.
+#
+# Demos expect a local OpenAI-compatible endpoint. Ollama works out of the box:
+#   ollama pull gemma4:latest
+[general]
+name = "ezbos-demos"
+version = "1.4.1"
+environment = "release"
+
+[global_model]
+model = "gemma4:latest"
+base_url = "http://127.0.0.1:11434/v1"
+api_key = "ollama"
+
+[agent]
+max_iterations = 50
+timeout_seconds = 120
+
+[logging]
+level = "info"
+console = false
+
+[bus]
+max_queue_size = 1000
+
+[sandbox]
+enabled = false

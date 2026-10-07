@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node --test",
+    "test": "node --import tsx --test",
     "example:tools": "tsx examples/01-tools.ts",
     "example:hooks": "tsx examples/02-hooks.ts",
     "example:plugins": "tsx examples/03-plugins.ts",
@@ -41,7 +41,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@open1s/jsbos": "^2.4.1"
+    "@open1s/jsbos": "^3.0.2"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
